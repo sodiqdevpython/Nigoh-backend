@@ -5,8 +5,8 @@ class ComputerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Computer
         fields = [
-            'id', 'bios_uuid', 'hostname', 'mac_address', 'ip_address', 'group',
-            'cpu_info', 'ram_gb', 'storage_info', 'last_boot_time'  # Yangi maydonlar qo'shildi
+            'id', 'bios_uuid', 'hostname', 'mac_address', 'group',
+            'cpu_info', 'ram_gb', 'storage_info'  # Yangi maydonlar qo'shildi
         ]
         read_only_fields = ['id']
 

@@ -84,3 +84,4 @@ class ComputerConsumer(AsyncWebsocketConsumer):
             comp.save(update_fields=['last_seen'])
         except Computer.DoesNotExist:
             pass
+

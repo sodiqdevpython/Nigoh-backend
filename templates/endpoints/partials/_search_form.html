@@ -1,0 +1,8 @@
+<form method="GET" class="mb-3 d-flex">
+    <input type="hidden" name="tab" value="{{ current_tab }}">
+    <input type="text" name="search" class="form-control bg-transparent border-secondary text-white w-50 mr-2" placeholder="Shu bo'limdan izlash..." value="{{ search_query }}">
+    <button type="submit" class="btn btn-light px-4"><i class="zmdi zmdi-search"></i> Izlash</button>
+    {% if search_query %}
+        <a href="?tab={{ current_tab }}" class="btn btn-secondary ml-2 px-3">Tozalash</a>
+    {% endif %}
+</form>

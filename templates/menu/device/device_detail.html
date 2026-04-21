@@ -1,0 +1,648 @@
+{% extends 'base/base.html' %}
+{% block content %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+    /* Haqiqiy Glassmorphism (Shisha) effekti */
+    .bg-dark-transparent { 
+        background-color: rgba(0, 0, 0, 0.45) !important; 
+        backdrop-filter: blur(12px); 
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+    .bg-glass { 
+        background-color: rgba(0, 0, 0, 0.3) !important; 
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+    .border-light-3 { border: 1px solid rgba(255, 255, 255, 0.15) !important; }
+    .border-bottom-light-3 { border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important; }
+    .border-top-light-3 { border-top: 1px solid rgba(255, 255, 255, 0.15) !important; }
+    
+    .text-white { color: #ffffff !important; text-shadow: 0px 1px 3px rgba(0, 0, 0, 0.8); }
+    .text-light { color: #e4e4e4 !important; }
+    .text-muted { color: #adb5bd !important; } 
+
+    .table-glass { color: #f8f9fa; }
+    .table-glass th { border-bottom: 2px solid rgba(255,255,255,0.1); border-top: none; font-weight: 600; color: #ffffff; text-shadow: 0px 1px 2px rgba(0,0,0,0.8); }
+    .table-glass td { border-top: 1px solid rgba(255,255,255,0.05); background-color: transparent !important; vertical-align: middle; }
+    .table-hover.table-glass tbody tr:hover td { background-color: rgba(255, 255, 255, 0.1) !important; color: #ffffff; }
+    
+    .nav-tabs-glass { border-bottom: 1px solid rgba(255, 255, 255, 0.15); }
+    .nav-tabs-glass .nav-item { margin-bottom: -1px; }
+    .nav-tabs-glass .nav-link { 
+        color: #ced4da; 
+        border: none; 
+        border-bottom: 2px solid transparent; 
+        background: transparent !important;
+        padding: 12px 20px;
+        font-weight: 500;
+        transition: 0.3s;
+        text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.5);
+    }
+    .nav-tabs-glass .nav-link:hover { color: #ffffff; border-color: rgba(255, 255, 255, 0.3); }
+    .nav-tabs-glass .nav-link.active { color: #ffffff; border-color: #ffffff; text-shadow: 0px 1px 4px rgba(0, 0, 0, 0.9); }
+</style>
+
+<div class="content-wrapper">
+    <div class="container-fluid">
+        
+        <div class="row mt-3 mb-4">
+            <div class="col-12">
+                <div class="card bg-dark-transparent border-light-3 text-white mb-0">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h4 class="mb-1 text-white">
+                                    <i class="zmdi zmdi-desktop-windows mr-2" style="color: #a0a0a0;"></i> 
+                                    {{ computer.hostname|default:"Nomsiz Kompyuter" }}
+                                </h4>
+                                <p class="text-muted mb-0"><i class="zmdi zmdi-key mr-1"></i> UUID: <span class="text-light">{{ computer.bios_uuid }}</span></p>
+                            </div>
+                            <div class="text-right d-flex flex-column align-items-end">
+                                <div class="d-flex align-items-center mb-2">
+                                    {% if computer.is_online %}
+                                        <span class="badge px-3 py-2 mr-2" style="background: rgba(40, 167, 69, 0.2); color: #4caf50; border: 1px solid #4caf50; text-shadow: none;"><i class="zmdi zmdi-circle"></i> Onlayn</span>
+                                        
+                                        <button type="button" id="btnRemoteControl" class="btn btn-sm px-3 py-2" data-toggle="modal" data-target="#remoteControlModal" style="background: rgba(220, 53, 69, 0.8); color: white; border: 1px solid #dc3545; box-shadow: 0 0 10px rgba(220,53,69,0.3);">
+                                            <i class="zmdi zmdi-remote-control text-white mr-1"></i> Boshqarish
+                                        </button>
+                                    {% else %}
+                                        <span class="badge px-3 py-2" style="background: rgba(220, 53, 69, 0.2); color: #ff5252; border: 1px solid #ff5252; text-shadow: none;"><i class="zmdi zmdi-circle-o"></i> Oflayn</span>
+                                    {% endif %}
+                                </div>
+                                <p class="text-muted mb-0 small">Oxirgi aloqa: <br> <span class="text-light">{{ computer.last_seen|date:"d M Y, H:i:s" }}</span></p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="accordionComputerDetails">
+                        <div class="card border-0 bg-transparent mb-0">
+                            <div class="card-header border-top-light-3 bg-transparent p-0" id="headingDetails">
+                                <h5 class="mb-0">
+                                    <button class="btn btn-link btn-block text-left text-white text-decoration-none py-3 px-4 d-flex justify-content-between align-items-center" type="button" data-toggle="collapse" data-target="#collapseDetails" aria-expanded="true" aria-controls="collapseDetails">
+                                        <span><i class="zmdi zmdi-info-outline mr-2"></i> Qurilmaning barcha texnik ko'rsatkichlari</span><i class="zmdi zmdi-chevron-down"></i>
+                                    </button>
+                                </h5>
+                            </div>
+                            <div id="collapseDetails" class="collapse show" aria-labelledby="headingDetails" data-parent="#accordionComputerDetails">
+                                <div class="card-body border-top-light-3 bg-glass">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-4 mb-md-0">
+                                            <h6 class="text-light border-bottom-light-3 pb-2 mb-3"><i class="zmdi zmdi-memory"></i> Tizim xususiyatlari</h6>
+                                            <ul class="list-group list-group-flush bg-transparent">
+                                                <li class="list-group-item bg-transparent text-white px-0 d-flex justify-content-between align-items-center border-light-3 px-3"><span class="text-muted">Protsessor (CPU):</span><span class="text-right">{{ computer.cpu_info|default:"Aniqlanmagan" }}</span></li>
+                                                <li class="list-group-item bg-transparent text-white px-0 d-flex justify-content-between align-items-center border-light-3 px-3"><span class="text-muted">Tezkor xotira (RAM):</span><span class="text-right">{{ computer.ram_gb|default:"0" }} GB</span></li>
+                                                <li class="list-group-item bg-transparent text-white px-0 d-flex justify-content-between align-items-center border-light-3 border-bottom-0 px-3"><span class="text-muted">Disk xotirasi (Storage):</span><span class="text-right">{{ computer.storage_info|default:"Aniqlanmagan" }}</span></li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6 class="text-light border-bottom-light-3 pb-2 mb-3"><i class="zmdi zmdi-network"></i> Tarmoq va Manzillar</h6>
+                                            <ul class="list-group list-group-flush bg-transparent">
+                                                <li class="list-group-item bg-transparent text-white px-0 d-flex justify-content-between align-items-center border-light-3 px-3"><span class="text-muted">MAC Manzil:</span><span class="text-right text-monospace">{{ computer.mac_address|default:"-" }}</span></li>
+                                                <li class="list-group-item bg-transparent text-white px-0 d-flex justify-content-between align-items-center border-light-3 border-bottom-0 px-3"><span class="text-muted">Biriktirilgan Guruh:</span><span class="text-right">{% if computer.group %}<span class="badge px-2 py-1" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); text-shadow: none;"><i class="zmdi zmdi-folder"></i> {{ computer.group.name }}</span>{% else %}<span class="text-warning">Guruhsiz</span>{% endif %}</span></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ul class="nav nav-tabs nav-tabs-glass mb-4">
+            <li class="nav-item"><a class="nav-link {% if current_tab == 'usage' %}active{% endif %}" href="?tab=usage&time={{ time_filter }}"><i class="zmdi zmdi-chart mr-1"></i> Ilovalar statistikasi</a></li>
+            <li class="nav-item"><a class="nav-link {% if current_tab == 'activity' %}active{% endif %}" href="?tab=activity&time={{ time_filter }}"><i class="zmdi zmdi-eye mr-1"></i> Faollik tarixi</a></li>
+            <li class="nav-item"><a class="nav-link {% if current_tab == 'web_blocked' %}active{% endif %}" href="?tab=web_blocked"><i class="zmdi zmdi-globe mr-1"></i> Bloklangan Saytlar</a></li>
+            <li class="nav-item"><a class="nav-link {% if current_tab == 'app_blocked' %}active{% endif %}" href="?tab=app_blocked"><i class="zmdi zmdi-block mr-1"></i> Bloklangan Dasturlar</a></li>
+            <li class="nav-item"><a class="nav-link {% if current_tab == 'sessions' %}active{% endif %}" href="?tab=sessions"><i class="zmdi zmdi-videocam mr-1"></i> Sessiyalar</a></li>
+        </ul>
+
+        {% if current_tab != 'sessions' %}
+        <form method="GET" class="mb-4 d-flex">
+            <input type="hidden" name="tab" value="{{ current_tab }}">
+            <input type="hidden" name="time" value="{{ time_filter }}">
+            <input type="text" name="search" class="form-control bg-dark-transparent border-light-3 text-white w-50 mr-2" placeholder="Shu bo'limdan izlash..." value="{{ search_query }}">
+            <button type="submit" class="btn btn-light px-4"><i class="zmdi zmdi-search"></i> Izlash</button>
+            {% if search_query %}
+                <a href="?tab={{ current_tab }}&time={{ time_filter }}" class="btn btn-secondary ml-2 px-3">Tozalash</a>
+            {% endif %}
+        </form>
+        {% endif %}
+
+        <div class="card bg-dark-transparent border-light-3 text-white">
+            <div class="card-body p-0">
+                
+                {% if current_tab == 'usage' %}
+                    {% if app_chart_labels %}
+                    <div class="p-4 border-bottom-light-3 bg-glass">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="text-white mb-0" style="font-size: 16px;"><i class="zmdi zmdi-chart"></i> Top 10 Eng faol dasturlar</h5>
+                            <div class="btn-group border-light-3 rounded">
+                                <a href="?tab=usage&time=today{% if search_query %}&search={{ search_query }}{% endif %}" class="btn btn-sm {% if time_filter == 'today' %}btn-light text-dark{% else %}btn-transparent text-light{% endif %}">Bugun</a>
+                                <a href="?tab=usage&time=week{% if search_query %}&search={{ search_query }}{% endif %}" class="btn btn-sm {% if time_filter == 'week' %}btn-light text-dark{% else %}btn-transparent text-light{% endif %}">Shu hafta</a>
+                                <a href="?tab=usage&time=month{% if search_query %}&search={{ search_query }}{% endif %}" class="btn btn-sm {% if time_filter == 'month' %}btn-light text-dark{% else %}btn-transparent text-light{% endif %}">Shu oy</a>
+                            </div>
+                        </div>
+                        <canvas id="appUsageChart" height="70"></canvas>
+                    </div>
+                    {% endif %}
+
+                    <div class="table-responsive">
+                        <table class="table table-hover table-glass mb-0" style="border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;"></th>
+                                    <th>Dastur nomi</th>
+                                    <th>Ochiq turgan vaqt</th>
+                                    <th>Aktiv bo'lgan vaqt</th>
+                                    <th>Klaviatura faolligi</th>
+                                    <th>Sichqoncha faolligi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in page_obj %}
+                                <tr data-toggle="collapse" data-target="#usage-detail-{{ item.id }}" style="cursor: pointer;">
+                                    <td class="text-center text-muted"><i class="zmdi zmdi-chevron-right"></i></td>
+                                    <td class="font-weight-bold text-white"><i class="zmdi zmdi-window-maximize mr-2" style="color: #a0a0a0;"></i> {{ item.app_name }}</td>
+                                    <td>{{ item.total_open_seconds }} sekund</td>
+                                    <td class="text-success">{{ item.active_seconds }} sekund</td>
+                                    <td>{{ item.keyboard_active_seconds }} sekund</td>
+                                    <td>{{ item.mouse_active_seconds }} sekund</td>
+                                </tr>
+                                
+                                <tr class="p-0 border-0 bg-transparent">
+                                    <td colspan="6" class="p-0 border-0">
+                                        <div class="collapse" id="usage-detail-{{ item.id }}">
+                                            <div class="p-4 bg-dark-transparent border-left" style="border-color: #4dabf7 !important; border-width: 3px !important; border-style: solid;">
+                                                <h6 class="text-white mb-3"><i class="zmdi zmdi-info-outline"></i> <strong>{{ item.app_name }}</strong> bo'yicha to'liq hisobot:</h6>
+                                                <div class="row text-light">
+                                                    <div class="col-md-6">
+                                                        <ul class="list-unstyled">
+                                                            <li class="mb-2"><strong class="text-muted">ID Raqami:</strong> #{{ item.id }}</li>
+                                                            <li class="mb-2"><strong class="text-muted">Fayl nomi:</strong> {{ item.app_name }}</li>
+                                                            <li class="mb-2"><strong class="text-muted">Baza qaydi:</strong> {{ item.created_at|date:"d M Y, H:i:s" }}</li>
+                                                        </ul>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <ul class="list-unstyled">
+                                                            <li class="mb-2"><strong class="text-muted">Umumiy ochiq turgan vaqt:</strong> {{ item.total_open_seconds }} sekund</li>
+                                                            <li class="mb-2"><strong class="text-muted">Sof Aktiv (Fokus) vaqt:</strong> <span class="badge badge-success" style="text-shadow: none;">{{ item.active_seconds }} sekund</span></li>
+                                                            <li class="mb-2"><strong class="text-muted">Sichqoncha faol vaqti:</strong> <span class="badge badge-info" style="text-shadow: none;">{{ item.mouse_active_seconds }} sekund</span></li>
+                                                            <li class="mb-2"><strong class="text-muted">Klaviatura faol vaqti:</strong> <span class="badge badge-warning text-dark" style="text-shadow: none;">{{ item.keyboard_active_seconds }} sekund</span></li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="6" class="text-center py-5 text-muted">Ma'lumot topilmadi</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <script>
+                        document.addEventListener("DOMContentLoaded", function() {
+                            if (document.getElementById('appUsageChart')) {
+                                const ctx = document.getElementById('appUsageChart').getContext('2d');
+                                new Chart(ctx, {
+                                    type: 'bar',
+                                    data: {
+                                        labels: {{ app_chart_labels|safe|default:"[]" }},
+                                        datasets: [{
+                                            label: 'Umumiy Aktiv vaqt (sekund)',
+                                            data: {{ app_chart_data|safe|default:"[]" }},
+                                            backgroundColor: 'rgba(255, 255, 255, 0.5)',
+                                            borderColor: 'rgba(255, 255, 255, 0.8)',
+                                            borderWidth: 1
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        scales: { 
+                                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#ccc' } },
+                                            x: { grid: { display: false }, ticks: { color: '#ccc' } } 
+                                        },
+                                        plugins: { legend: { labels: { color: '#fff' } } }
+                                    }
+                                });
+                            }
+                        });
+                    </script>
+
+                {% elif current_tab == 'activity' %}
+                    {% if act_chart_labels %}
+                    <div class="p-4 border-bottom-light-3 bg-glass">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="text-white mb-0" style="font-size: 16px;"><i class="zmdi zmdi-chart"></i> Top 10 Eng ko'p sarflangan sahifalar / oynalar</h5>
+                            <div class="btn-group border-light-3 rounded">
+                                <a href="?tab=activity&time=today{% if search_query %}&search={{ search_query }}{% endif %}" class="btn btn-sm {% if time_filter == 'today' %}btn-light text-dark{% else %}btn-transparent text-light{% endif %}">Bugun</a>
+                                <a href="?tab=activity&time=week{% if search_query %}&search={{ search_query }}{% endif %}" class="btn btn-sm {% if time_filter == 'week' %}btn-light text-dark{% else %}btn-transparent text-light{% endif %}">Shu hafta</a>
+                                <a href="?tab=activity&time=month{% if search_query %}&search={{ search_query }}{% endif %}" class="btn btn-sm {% if time_filter == 'month' %}btn-light text-dark{% else %}btn-transparent text-light{% endif %}">Shu oy</a>
+                            </div>
+                        </div>
+                        <canvas id="actUsageChart" height="70"></canvas>
+                    </div>
+                    {% endif %}
+
+                    <div class="table-responsive">
+                        <table class="table table-hover table-glass mb-0" style="border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;"></th>
+                                    <th>Oyna sarlavhasi (Sayt nomi)</th>
+                                    <th>Dastur/Brauzer</th>
+                                    <th>Sarflangan vaqt</th>
+                                    <th>Sana</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in page_obj %}
+                                <tr data-toggle="collapse" data-target="#act-detail-{{ item.id }}" style="cursor: pointer;">
+                                    <td class="text-center text-muted"><i class="zmdi zmdi-chevron-right"></i></td>
+                                    <td>{{ item.title|default:"Nomsiz oyna"|truncatechars:60 }}</td>
+                                    <td class="font-weight-bold text-white">{{ item.app_name }}</td>
+                                    <td class="text-success">{{ item.duration_seconds }} sekund</td>
+                                    <td>{{ item.created_at|date:"H:i, d-M" }}</td>
+                                </tr>
+                                
+                                <tr class="p-0 border-0 bg-transparent">
+                                    <td colspan="5" class="p-0 border-0">
+                                        <div class="collapse" id="act-detail-{{ item.id }}">
+                                            <div class="p-4 bg-dark-transparent border-left" style="border-color: #38c172 !important; border-width: 3px !important; border-style: solid;">
+                                                <h6 class="text-white mb-3">🌐 Sahifa faolligi bo'yicha to'liq hisobot:</h6>
+                                                <ul class="list-unstyled text-light">
+                                                    <li class="mb-2"><strong class="text-muted">Oyna sarlavhasi:</strong> {{ item.title|default:"No'malum" }}</li>
+                                                    <li class="mb-2"><strong class="text-muted">Dastur/Brauzer:</strong> {{ item.app_name }}</li>
+                                                    <li class="mb-2"><strong class="text-muted">Sarflangan aniq vaqt:</strong> <span class="badge badge-success" style="text-shadow: none;">{{ item.duration_seconds }} sekund</span></li>
+                                                    {% if item.url %}
+                                                    <li class="mb-2"><strong class="text-muted">URL Manzil:</strong> <a href="{{ item.url }}" target="_blank" class="text-info" style="word-break: break-all;">{{ item.url }}</a></li>
+                                                    {% endif %}
+                                                    <li class="mb-2"><strong class="text-muted">Qayd etilgan sana:</strong> {{ item.created_at|date:"d M Y, H:i:s" }}</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center py-5 text-muted">Ma'lumot topilmadi</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <script>
+                        document.addEventListener("DOMContentLoaded", function() {
+                            if (document.getElementById('actUsageChart')) {
+                                const ctx = document.getElementById('actUsageChart').getContext('2d');
+                                new Chart(ctx, {
+                                    type: 'bar', 
+                                    data: {
+                                        labels: {{ act_chart_labels|safe|default:"[]" }},
+                                        datasets: [{
+                                            label: 'Umumiy sarflangan vaqt (sekund)',
+                                            data: {{ act_chart_data|safe|default:"[]" }},
+                                            backgroundColor: 'rgba(56, 193, 114, 0.5)',
+                                            borderColor: 'rgba(56, 193, 114, 0.8)',
+                                            borderWidth: 1
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        scales: { 
+                                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#ccc' } },
+                                            x: { grid: { display: false }, ticks: { color: '#ccc' } } 
+                                        },
+                                        plugins: { legend: { labels: { color: '#fff' } } }
+                                    }
+                                });
+                            }
+                        });
+                    </script>
+
+                {% elif current_tab == 'web_blocked' %}
+                    <div class="table-responsive">
+                        <table class="table table-hover table-glass mb-0" style="border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;"></th>
+                                    <th>Bloklangan URL</th>
+                                    <th>Urinishlar soni</th>
+                                    <th>Oxirgi urinish vaqti</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in page_obj %}
+                                <tr data-toggle="collapse" data-target="#web-detail-{{ item.id }}" style="cursor: pointer;">
+                                    <td class="text-center text-muted"><i class="zmdi zmdi-chevron-right"></i></td>
+                                    <td class="text-danger font-weight-bold"><i class="zmdi zmdi-block mr-2"></i> {{ item.url.url_address }}</td>
+                                    <td><span class="badge badge-warning px-2 py-1 text-dark" style="text-shadow: none;">{{ item.attempts_count }} marta</span></td>
+                                    <td>{{ item.created_at|date:"d-M-Y H:i:s" }}</td>
+                                </tr>
+                                <tr class="p-0 border-0 bg-transparent">
+                                    <td colspan="4" class="p-0 border-0">
+                                        <div class="collapse" id="web-detail-{{ item.id }}">
+                                            <div class="p-4 bg-dark-transparent border-left" style="border-color: #e3342f !important; border-width: 3px !important; border-style: solid;">
+                                                <h6 class="text-white mb-3">🚫 Sayt urinishi detallari:</h6>
+                                                <ul class="list-unstyled text-light mb-0">
+                                                    <li class="mb-2"><strong class="text-muted">Taqiqlangan manzil:</strong> {{ item.url.url_address }}</li>
+                                                    <li class="mb-2"><strong class="text-muted">Urinishlar:</strong> <span class="badge badge-danger" style="text-shadow: none;">{{ item.attempts_count }}</span></li>
+                                                    <li class="mb-2"><strong class="text-muted">Log saqlangan vaqt:</strong> {{ item.created_at|date:"d M Y, H:i:s" }}</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="4" class="text-center py-5 text-muted">Ma'lumot topilmadi</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                {% elif current_tab == 'app_blocked' %}
+                    <div class="table-responsive">
+                        <table class="table table-hover table-glass mb-0" style="border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;"></th>
+                                    <th>Dastur nomi</th>
+                                    <th>Fayl yo'li (Path)</th>
+                                    <th>Qoida turi</th>
+                                    <th>Urinishlar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in page_obj %}
+                                <tr data-toggle="collapse" data-target="#app-detail-{{ item.id }}" style="cursor: pointer;">
+                                    <td class="text-center text-muted"><i class="zmdi zmdi-chevron-right"></i></td>
+                                    <td class="text-danger font-weight-bold"><i class="zmdi zmdi-shield-security mr-2"></i> {{ item.app_name }}</td>
+                                    <td><small class="text-muted">{{ item.full_path|truncatechars:40 }}</small></td>
+                                    <td>{{ item.process_rule.get_match_type_display }}</td>
+                                    <td><span class="badge badge-warning px-2 py-1 text-dark" style="text-shadow: none;">{{ item.attempts_count }} ta</span></td>
+                                </tr>
+                                <tr class="p-0 border-0 bg-transparent">
+                                    <td colspan="5" class="p-0 border-0">
+                                        <div class="collapse" id="app-detail-{{ item.id }}">
+                                            <div class="p-4 bg-dark-transparent border-left" style="border-color: #e3342f !important; border-width: 3px !important; border-style: solid;">
+                                                <h6 class="text-white mb-3">🛡️ Bloklangan jarayon detallari:</h6>
+                                                <ul class="list-unstyled text-light mb-0">
+                                                    <li class="mb-2"><strong class="text-muted">Ishga tushgan dastur:</strong> {{ item.app_name }}</li>
+                                                    <li class="mb-2"><strong class="text-muted">To'liq yo'l (Path):</strong> <span class="text-white">{{ item.full_path }}</span></li>
+                                                    <li class="mb-2"><strong class="text-muted">Bloklash sababi (Qoida):</strong> {{ item.process_rule.name }} ({{ item.process_rule.get_match_type_display }})</li>
+                                                    <li class="mb-2"><strong class="text-muted">Log saqlangan vaqt:</strong> {{ item.created_at|date:"d M Y, H:i:s" }}</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center py-5 text-muted">Ma'lumot topilmadi</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                {% elif current_tab == 'sessions' %}
+                    <div class="table-responsive">
+                        <table class="table table-hover table-glass mb-0">
+                            <thead>
+                                <tr>
+                                    <th>So'ralgan vaqt</th>
+                                    <th>Holati</th>
+                                    <th>Stream URL</th>
+                                    <th>Sana</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in page_obj %}
+                                <tr>
+                                    <td>{{ item.requested_duration }} sekund</td>
+                                    <td>
+                                        {% if item.status == 'ACTIVE' %}
+                                            <span class="badge px-2 py-1" style="background: rgba(40, 167, 69, 0.2); color: #4caf50; border: 1px solid #4caf50; text-shadow: none;">Faol</span>
+                                        {% elif item.status == 'CLOSED' %}
+                                            <span class="badge px-2 py-1" style="background: rgba(255, 255, 255, 0.1); color: #ccc; border: 1px solid #ccc; text-shadow: none;">Yopilgan</span>
+                                        {% else %}
+                                            <span class="badge px-2 py-1" style="background: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; text-shadow: none;">Kutilmoqda</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.stream_url %}
+                                            <a href="{{ item.stream_url }}" 
+                                               target="_blank" 
+                                               onclick="return confirm('⚠️ XAVFSIZLIK OGOHLANTIRISHI:\n\nKompyuterni masofadan boshqarish uchun siz ushbu qurilma bilan bitta tarmoqda (Local Network / Wi-Fi) bo\'lishingiz shart.\n\nDavom etishni xohlaysizmi?');" 
+                                               class="btn btn-sm px-3" 
+                                               style="background: rgba(40, 167, 69, 0.2); color: #4caf50; border: 1px solid #4caf50; text-shadow: none;">
+                                                <i class="zmdi zmdi-play-circle mr-1"></i> Boshqarish
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.created_at|date:"d M, H:i" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="4" class="text-center py-5 text-muted">Ma'lumot topilmadi</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+
+            </div>
+        </div>
+
+        {% if page_obj.has_other_pages %}
+        <nav class="mt-4 pb-5">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link bg-dark-transparent text-white border-light-3" href="?tab={{ current_tab }}&time={{ time_filter }}&page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}">Oldingi</a>
+                    </li>
+                {% endif %}
+
+                {% for i in page_obj.paginator.page_range %}
+                    {% if page_obj.number == i %}
+                        <li class="page-item active">
+                            <span class="page-link bg-light text-dark border-light">{{ i }}</span>
+                        </li>
+                    {% elif i > page_obj.number|add:'-4' and i < page_obj.number|add:'4' %}
+                        <li class="page-item">
+                            <a class="page-link bg-dark-transparent text-white border-light-3" href="?tab={{ current_tab }}&time={{ time_filter }}&page={{ i }}{% if search_query %}&search={{ search_query }}{% endif %}">{{ i }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link bg-dark-transparent text-white border-light-3" href="?tab={{ current_tab }}&time={{ time_filter }}&page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}">Keyingi</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+    </div>
+</div>
+
+<div class="modal fade" id="remoteControlModal" tabindex="-1" role="dialog" data-backdrop="static" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content bg-dark-transparent border-light-3" style="backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);">
+            
+            <div class="modal-header border-bottom-light-3">
+                <h5 class="modal-title text-white"><i class="zmdi zmdi-remote-control mr-2 text-danger"></i> Masofadan Boshqarish</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            
+            <div class="modal-body text-light">
+                
+                <div class="alert mb-4" style="background: rgba(255, 193, 7, 0.15); border: 1px solid rgba(255, 193, 7, 0.5); color: #ffc107;">
+                    <strong><i class="zmdi zmdi-alert-triangle mr-1"></i> Muhim eslatma!</strong><br>
+                    Sizning qurilmangiz ushbu kompyuter bilan <b>bitta lokal tarmoqda (Local Network / Wi-Fi)</b> bo'lishi shart. Aks holda ulanish imkonsiz.
+                </div>
+                
+                <div id="modalLoadingState" class="text-center py-3">
+                    <div class="spinner-border text-info mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                    <h6 class="text-white">Agentdan javob kutilmoqda...</h6>
+                    <p class="text-muted small">Iltimos, oynani yopmang. Qurilma tayyorlanmoqda.</p>
+                </div>
+
+                <div id="modalSuccessState" style="display: none;">
+                    <p class="mb-2 text-white"><i class="zmdi zmdi-check-circle text-success mr-1"></i> Qurilma oqimi (Stream) tayyor:</p>
+                    
+                    <div class="p-3 mb-3 rounded" style="background: rgba(0,0,0,0.5); border: 1px dashed rgba(255,255,255,0.2); word-break: break-all;">
+                        <code id="readyStreamUrl" style="color: #4caf50; font-size: 15px;"></code>
+                    </div>
+                    <p class="text-muted small">Qurilmaga ulanish va boshqarishni boshlash uchun pastdagi "Ulanish" tugmasini bosing.</p>
+                </div>
+
+                <div id="modalErrorState" style="display: none;">
+                    <div class="alert p-3 mb-0" style="background: rgba(220, 53, 69, 0.15); border: 1px solid rgba(220, 53, 69, 0.5); color: #ff5252;">
+                        <i class="zmdi zmdi-close-circle mr-1"></i> <span id="errorText">Ulanish imkonsiz.</span>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <div class="modal-footer border-top-light-3">
+                <button type="button" class="btn btn-secondary px-4" data-dismiss="modal">Bekor qilish</button>
+                
+                <a href="#" id="btnConnectStream" target="_blank" class="btn btn-success px-4" style="display: none; background: #28a745; border-color: #28a745;">
+                    <i class="zmdi zmdi-play-circle mr-1"></i> Ulanish
+                </a>
+            </div>
+            
+        </div>
+    </div>
+</div>
+
+<script>
+    let pollInterval;
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const btnRemote = document.getElementById('btnRemoteControl');
+        
+        if (btnRemote) {
+            btnRemote.addEventListener('click', async function() {
+                // 1. Modaldagi UI ni boshlang'ich holatga keltirish
+                document.getElementById('modalLoadingState').style.display = 'block';
+                document.getElementById('modalSuccessState').style.display = 'none';
+                document.getElementById('modalErrorState').style.display = 'none';
+                document.getElementById('btnConnectStream').style.display = 'none';
+
+                // API ga yangi sessiya yaratish bo'yicha so'rov (eskilari o'chadi)
+                try {
+                    const response = await fetch(`{% url 'remote_control_request' computer.bios_uuid %}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}' 
+                        },
+                        body: JSON.stringify({ time: 300 })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        // 2. Muvaffaqiyatli POST ketdi! Har 2 soniyada tekshiramiz (Polling)
+                        pollSessionStatus(data.session_id);
+                    } else {
+                        showError(data.error || "So'rovni yuborib bo'lmadi");
+                    }
+                } catch (err) {
+                    showError("Tarmoq xatosi! Internetni tekshiring.");
+                }
+            });
+        }
+    });
+
+    // HAR 2 SONIYADA API DAN STATUSNI TEKSHIRADIGAN FUNKSIYA
+    function pollSessionStatus(sessionId) {
+        clearInterval(pollInterval);
+        
+        // Django'dan to'g'ri URL manzilni olamiz
+        const baseUrl = "{% url 'remote_control_status' 'PLACEHOLDER' %}";
+        const fetchUrl = baseUrl.replace('PLACEHOLDER', sessionId);
+
+        pollInterval = setInterval(async () => {
+            try {
+                const response = await fetch(fetchUrl); 
+                
+                if (!response.ok) {
+                    console.log("Server tekshirilmoqda... Status:", response.status);
+                    return; 
+                }
+
+                const data = await response.json();
+                
+                // Agent to'liq URL ni yuborgan bo'lsa
+                if (data.is_active && data.stream_url) {
+                    clearInterval(pollInterval); 
+                    // JS funksiyaga to'g'ridan-to'g'ri URL ni yuboramiz
+                    showSuccess(data.stream_url); 
+                }
+
+            } catch (err) {
+                console.log("Kutilmoqda yoki tarmoq uzildi...");
+            }
+        }, 2000); 
+    }
+
+    // TAYYOR URL KELGANDA UI NI O'ZGARTIRISH
+    function showSuccess(streamUrl) {
+        // HEC QANDAY TOKEN QO'SHILMAYDI, TO'G'RIDAN-TO'G'RI URL O'ZI ISHLATILADI
+        document.getElementById('modalLoadingState').style.display = 'none';
+        document.getElementById('readyStreamUrl').innerText = streamUrl;
+        document.getElementById('modalSuccessState').style.display = 'block';
+
+        const btnConnect = document.getElementById('btnConnectStream');
+        btnConnect.href = streamUrl;
+        btnConnect.style.display = 'inline-block';
+        
+        btnConnect.onclick = function() {
+            $('#remoteControlModal').modal('hide');
+        };
+    }
+
+    function showError(message) {
+        clearInterval(pollInterval);
+        document.getElementById('modalLoadingState').style.display = 'none';
+        document.getElementById('errorText').innerText = message;
+        document.getElementById('modalErrorState').style.display = 'block';
+    }
+
+    $('#remoteControlModal').on('hidden.bs.modal', function () {
+        clearInterval(pollInterval);
+    });
+</script>
+
+{% endblock %}

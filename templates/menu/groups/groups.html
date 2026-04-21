@@ -1,0 +1,262 @@
+{% extends "base/base.html" %}
+{% block content %}
+
+<div class="content-wrapper">
+    <div class="container-fluid">
+        
+        <div class="row mt-3">
+            <div class="col-lg-12">
+                
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible" role="alert">
+                            <button type="button" class="close" data-dismiss="alert">&times;</button>
+                            <div class="alert-message">
+                                <span>{{ message }}</span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
+                <div class="card">
+                    <div class="card-body">
+                        
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h5 class="card-title mb-0">Guruhlar</h5>
+                            <button type="button" class="btn btn-light px-5" data-toggle="modal" data-target="#createModal">
+                                <i class="zmdi zmdi-plus-circle"></i> Yangi Qo'shish
+                            </button>
+                        </div>
+
+                        <form method="get" class="row mb-4">
+                            <div class="col-md-5 form-group">
+                                <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Nomi yoki xona raqami...">
+                            </div>
+                            <div class="col-md-3 form-group">
+                                <select name="building" class="form-control">
+                                    <option value="">Barcha binolar</option>
+                                    {% for value, label in building_choices %}
+                                        <option value="{{ value }}" {% if value|stringformat:"s" == building_filter %}selected{% endif %}>
+                                            {{ label }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <button type="submit" class="btn btn-light px-4"><i class="zmdi zmdi-search"></i> Qidirish</button>
+                                <a href="{% url 'group_management' %}" class="btn btn-secondary px-4"><i class="zmdi zmdi-refresh"></i> Tozalash</a>
+                            </div>
+                        </form>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">#ID</th>
+                                        <th scope="col">Guruh Nomi</th>
+                                        <th scope="col">Bino</th>
+                                        <th scope="col">Qavat</th>
+                                        <th scope="col">Xona</th>
+                                        <th scope="col" class="text-right">Amallar</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for group in page_obj %}
+                                    <tr onclick="if(!event.target.closest('button')) { $('#detailModal{{ group.id }}').modal('show'); }" style="cursor: pointer;" title="Batafsil ko'rish uchun bosing">
+                                        <th scope="row">{{ group.id }}</th>
+                                        <td>{{ group.name }}</td>
+                                        <td>{{ group.get_building_display }}</td>
+                                        <td>{{ group.get_floor_display }}</td>
+                                        <td>{{ group.room_number }}</td>
+                                        
+                                        <td class="text-right">
+                                            <button type="button" class="btn btn-sm btn-light m-1" data-toggle="modal" data-target="#updateModal{{ group.id }}" title="Tahrirlash">
+                                                <i class="zmdi zmdi-edit"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-light m-1" data-toggle="modal" data-target="#deleteModal{{ group.id }}" title="O'chirish">
+                                                <i class="zmdi zmdi-delete"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="6" class="text-center py-4">Ma'lumot topilmadi</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {% if page_obj.has_other_pages %}
+                        <ul class="pagination justify-content-center mt-4">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ query }}&building={{ building_filter }}">Oldingi</a></li>
+                            {% endif %}
+
+                            {% for i in page_obj.paginator.page_range %}
+                                {% if page_obj.number == i %}
+                                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                                {% else %}
+                                    <li class="page-item"><a class="page-link" href="?page={{ i }}&q={{ query }}&building={{ building_filter }}">{{ i }}</a></li>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if page_obj.has_next %}
+                                <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ query }}&building={{ building_filter }}">Keyingi</a></li>
+                            {% endif %}
+                        </ul>
+                        {% endif %}
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% for group in page_obj %}
+    
+    <div class="modal fade" id="detailModal{{ group.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content border-secondary">
+                <div class="modal-header bg-dark border-secondary">
+                    <h5 class="modal-title text-white">Guruh ma'lumotlari</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body bg-dark text-white">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item bg-dark border-secondary"><strong>Nomi:</strong> {{ group.name }}</li>
+                        <li class="list-group-item bg-dark border-secondary"><strong>Bino:</strong> {{ group.get_building_display }}</li>
+                        <li class="list-group-item bg-dark border-secondary"><strong>Qavat:</strong> {{ group.get_floor_display }}</li>
+                        <li class="list-group-item bg-dark border-secondary"><strong>Xona:</strong> {{ group.room_number }}</li>
+                    </ul>
+                </div>
+                <div class="modal-footer bg-dark border-secondary">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Yopish</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="updateModal{{ group.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content border-secondary">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="update">
+                    <input type="hidden" name="group_id" value="{{ group.id }}">
+                    <div class="modal-header bg-dark border-secondary">
+                        <h5 class="modal-title text-white">Tahrirlash: {{ group.name }}</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body bg-dark text-white">
+                        <div class="form-group">
+                            <label>Guruh nomi</label>
+                            <input type="text" name="name" class="form-control" value="{{ group.name }}" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Bino</label>
+                            <select name="building" class="form-control" required>
+                                {% for value, label in building_choices %}
+                                    <option value="{{ value }}" {% if group.building|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Qavat</label>
+                            <select name="floor" class="form-control" required>
+                                <option value="">Qavatni tanlang</option>
+                                {% for value, label in floor_choices %}
+                                    <option value="{{ value }}" {% if group.floor|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Xona raqami</label>
+                            <input type="text" name="room_number" class="form-control" value="{{ group.room_number }}">
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-dark border-secondary">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Bekor qilish</button>
+                        <button type="submit" class="btn btn-light px-4">Saqlash</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="deleteModal{{ group.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content border-secondary">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="group_id" value="{{ group.id }}">
+                    <div class="modal-header bg-dark border-secondary">
+                        <h5 class="modal-title text-white">O'chirishni tasdiqlang</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body bg-dark text-white">
+                        <strong class="text-white">{{ group.name }}</strong> guruhini o'chirib tashlashga ishonchingiz komilmi?
+                    </div>
+                    <div class="modal-footer bg-dark border-secondary">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Yo'q</button>
+                        <button type="submit" class="btn btn-light text-danger px-4">Ha, o'chirish</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+{% endfor %}
+
+<div class="modal fade" id="createModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content border-secondary">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="create">
+                <div class="modal-header bg-dark border-secondary">
+                    <h5 class="modal-title text-white">Yangi guruh qo'shish</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body bg-dark text-white">
+                    <style>
+                        #createModal p { margin-bottom: 1rem; }
+                        #createModal input, #createModal select {
+                            display: block;
+                            width: 100%;
+                            padding: .375rem .75rem;
+                            font-size: 1rem;
+                            line-height: 1.5;
+                            color: white;
+                            background-color: rgba(255, 255, 255, 0.2);
+                            border: 1px solid rgba(255, 255, 255, 0.2);
+                            border-radius: .25rem;
+                        }
+                        #createModal select option { background-color: #333; }
+                    </style>
+                    {{ form.as_p }}
+                </div>
+                <div class="modal-footer bg-dark border-secondary">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Bekor qilish</button>
+                    <button type="submit" class="btn btn-light px-4">Qo'shish</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}

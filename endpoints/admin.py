@@ -23,34 +23,51 @@ def send_socket_command(room_name, action_name, extra_data=None):
         }
     )
 
+from django.contrib import admin
+from .models import Group
+
+
 @admin.register(Group)
 class GroupAdmin(admin.ModelAdmin):
-    list_display = ('name', 'description', 'get_computer_count')
-    actions = ['send_ping_to_group', 'shutdown_entire_group']
+    list_display = (
+        "id",
+        "name",
+        "building_display",
+        "floor_display",
+        "room_number",
+        "created_at",
+    )
 
-    def get_computer_count(self, obj):
-        return obj.computers.count()
-    get_computer_count.short_description = "Kompyuterlar soni"
+    list_filter = (
+        "building",
+        "floor",
+        "created_at",
+    )
 
-    # GURUH UCHUN BUYRUQLAR
-    @admin.action(description="Butun guruhga PING yuborish")
-    def send_ping_to_group(self, request, queryset):
-        for group in queryset:
-            send_socket_command(f'group_{group.id}', 'ping', {'message': 'Salom guruh!'})
-        self.message_user(request, "Tanlangan guruhlarga xabar yuborildi.")
+    search_fields = (
+        "name",
+        "room_number",
+    )
 
-    @admin.action(description="Guruhdagi barcha PC larni o'chirish (Shutdown)")
-    def shutdown_entire_group(self, request, queryset):
-        for group in queryset:
-            send_socket_command(f'group_{group.id}', 'shutdown')
-        self.message_user(request, "O'chirish buyrug'i yuborildi.")
+    ordering = ("-created_at",)
+
+    readonly_fields = ("created_at", "updated_at")
+
+    # 🔥 Custom display methods
+    def building_display(self, obj):
+        return obj.get_building_display()
+    building_display.short_description = "Bino"
+
+    def floor_display(self, obj):
+        return obj.get_floor_display()
+    floor_display.short_description = "Qavat"
 
 
 @admin.register(Computer)
 class ComputerAdmin(admin.ModelAdmin):
-    list_display = ('hostname', 'bios_uuid', 'ip_address', 'group', 'is_online', 'last_seen')
+    list_display = ('hostname', 'bios_uuid', 'group', 'is_online', 'last_seen')
     list_filter = ('is_online', 'group')
-    search_fields = ('hostname', 'bios_uuid', 'ip_address')
+    search_fields = ('hostname', 'bios_uuid')
     
     # Yangi dinamik harakatni ro'yxatga qo'shamiz
     actions = ['send_custom_command']

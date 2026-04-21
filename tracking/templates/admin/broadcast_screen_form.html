@@ -1,0 +1,31 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div style="padding: 20px; background: #fff; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); max-width: 600px;">
+    <h2 style="margin-top: 0;">Tanlangan kompyuterlarga ekranni tarqatish</h2>
+    <p>Quyidagi ma'lumotlarni kiritsangiz, barcha tanlangan PC larga buyruq yuboriladi.</p>
+    
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="broadcast_screen_action">
+        <input type="hidden" name="apply" value="1">
+        
+        {% for obj in computers %}
+            <input type="hidden" name="_selected_action" value="{{ obj.pk }}">
+        {% endfor %}
+        
+        <div style="margin-bottom: 20px;">
+            <label style="font-weight: bold; display: block; margin-bottom: 5px;">Stream URL (Ekran manzili):</label>
+            <input type="url" name="stream_url" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="http://192.168.1.180:5004/token">
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <label style="font-weight: bold; display: block; margin-bottom: 5px;">Davomiyligi (soniya):</label>
+            <input type="number" name="duration" value="300" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+
+        <button type="submit" style="background: #417690; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">
+            Barchasiga yuborish
+        </button>
+    </form>
+</div>
+{% endblock %}
