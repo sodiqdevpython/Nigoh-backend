@@ -1,11 +1,13 @@
 services:
   redis:
     image: redis:alpine
+    container_name: nigoh_redis
     ports:
       - '6379:6379'
 
   db:
     image: postgres:15-alpine
+    container_name: nigoh_db
     restart: always
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -18,7 +20,9 @@ services:
 
   web:
     build: .
-    command: gunicorn --env DJANGO_SETTINGS_MODULE=config.settings config.asgi:application -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --preload
+    container_name: nigoh_web
+    # Laptop uchun: workerlar sonini 4 taga oshirdik va reload yoqildi
+    command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
     volumes:
       - .:/app
     ports:
@@ -30,6 +34,7 @@ services:
       - .env
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
+      - PYTHONUNBUFFERED=1
 
 volumes:
   postgres_data:

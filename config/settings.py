@@ -71,8 +71,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            # docker-compose.yml dagi REDIS_URL o'zgaruvchisini o'qib oladi
-            "hosts": ['redis://redis:6379/0'],
+            "hosts": [env('REDIS_URL', default='redis://localhost:6379/0')],
         },
     },
 }
