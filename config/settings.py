@@ -53,9 +53,9 @@ INSTALLED_APPS = [
     'frontend'
 ]
 
-PASSWORD_HASHERS = [
-    'django.contrib.auth.hashers.Argon2PasswordHasher',
-]
+# PASSWORD_HASHERS = [
+#     'django.contrib.auth.hashers.Argon2PasswordHasher',
+# ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
