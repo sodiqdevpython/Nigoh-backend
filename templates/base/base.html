@@ -74,6 +74,20 @@
               <span>Qurilmalar</span>
             </a>
           </li>
+
+          <li>
+            <a href="{% url 'blocked_urls' %}">
+              <i class="zmdi zmdi-block"></i>
+              <span>Bloklangan URL</span>
+            </a>
+          </li>
+
+          <li>
+            <a href="{% url 'blocked_processes' %}">
+              <i class="zmdi zmdi-close-circle"></i>
+              <span>Bloklangan Jarayonlar</span>
+            </a>
+          </li>
         </ul>
       </div>
       <!--End sidebar-wrapper-->
@@ -147,8 +161,7 @@
                           {{ request.user.username }}
                         </h6>
                         <p class="user-subtitle">
-                          {{ request.user.first_name }} {{
-                          request.user.last_name }}
+                          {{ request.user.first_name }} {{request.user.last_name}}
                         </p>
                       </div>
                     </div>

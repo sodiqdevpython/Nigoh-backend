@@ -1,4 +1,3 @@
 id,name,match_type,description
-b88bfc03-077e-4bdf-a6d5-ec549a2c4981,telegram.exe,PROCESS,Test uchun
 a23565cc-8191-429f-8d5f-999549c33700,steam.exe,PARENT,Boshqa test uchun ota process ga qaraydi bu
 47d9d48e-7c3e-491a-b1d5-28e695c42a4c,counter-strike,PROCESS,test uchun o'yinga

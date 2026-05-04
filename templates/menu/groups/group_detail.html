@@ -1,0 +1,639 @@
+{% extends "base/base.html" %}
+{% block content %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+    .bg-dark-transparent {
+        background-color: rgba(0,0,0,0.45) !important;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+    .border-light-3 { border: 1px solid rgba(255,255,255,0.15) !important; }
+    .text-white { color: #fff !important; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+    .text-muted { color: #adb5bd !important; }
+
+    /* PC CARD */
+    .pc-card {
+        background: rgba(0,0,0,0.35);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+    }
+    .pc-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+        border-color: rgba(255,255,255,0.25);
+    }
+    .pc-card.online  { border-left: 3px solid #4caf50; }
+    .pc-card.offline { border-left: 3px solid rgba(255,82,82,0.5); }
+
+    .pc-status-dot {
+        width: 9px; height: 9px; border-radius: 50%;
+        display: inline-block; margin-right: 5px;
+        flex-shrink: 0;
+    }
+    .dot-online  { background: #4caf50; box-shadow: 0 0 6px #4caf50; animation: pulse-green 2s infinite; }
+    .dot-offline { background: #ff5252; }
+    @keyframes pulse-green {
+        0%,100% { box-shadow: 0 0 4px #4caf50; }
+        50%      { box-shadow: 0 0 10px #4caf50; }
+    }
+
+    /* MINI PROGRESS */
+    .mini-bar-wrap { background: rgba(255,255,255,0.08); border-radius: 3px; height: 5px; overflow: hidden; }
+    .mini-bar      { height: 5px; border-radius: 3px; transition: width 0.6s ease; }
+
+    /* STAT CARDS */
+    .stat-card {
+        background: rgba(0,0,0,0.35);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 10px;
+        padding: 18px 20px;
+    }
+    .stat-card .stat-icon {
+        width: 44px; height: 44px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.3rem; flex-shrink: 0;
+    }
+    .stat-card .stat-val { font-size: 1.9rem; font-weight: 700; line-height: 1; }
+    .stat-card .stat-lbl { font-size: 0.78rem; color: #adb5bd; margin-top: 3px; }
+
+    /* COMMAND PANEL */
+    .cmd-btn {
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 9px 0;
+        border: none;
+        width: 100%;
+        margin-bottom: 8px;
+        transition: opacity 0.2s, transform 0.1s;
+        display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .cmd-btn:hover  { opacity: 0.88; transform: translateY(-1px); }
+    .cmd-btn:active { transform: translateY(0); }
+    .cmd-lock     { background: rgba(33,150,243,0.75);  color:#fff; }
+    .cmd-restart  { background: rgba(255,152,0,0.75);   color:#fff; }
+    .cmd-shutdown { background: rgba(220,53,69,0.75);   color:#fff; }
+    .cmd-url      { background: rgba(102,187,106,0.75); color:#fff; }
+
+    /* TOAST */
+    #toast-box { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+    .toast-item {
+        background: rgba(20,20,30,0.95); border:1px solid rgba(255,255,255,0.15);
+        backdrop-filter:blur(10px); border-radius:8px;
+        padding: 10px 18px; color:#fff; font-size:0.88rem;
+        display:flex; align-items:center; gap:10px;
+        animation: slideIn 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    }
+    @keyframes slideIn { from{opacity:0;transform:translateX(40px)} to{opacity:1;transform:translateX(0)} }
+
+    .modal-glass { background:rgba(20,20,30,0.96); border:1px solid rgba(255,255,255,0.15); backdrop-filter:blur(12px); }
+    .modal-glass .modal-header { border-bottom:1px solid rgba(255,255,255,0.1); }
+    .modal-glass .modal-footer { border-top:1px solid rgba(255,255,255,0.1); }
+    .input-glass { background:rgba(255,255,255,0.1)!important; border:1px solid rgba(255,255,255,0.2)!important; color:#fff!important; }
+    .input-glass::placeholder { color:rgba(255,255,255,0.35); }
+</style>
+
+<div id="toast-box"></div>
+
+<div class="content-wrapper">
+<div class="container-fluid">
+
+    <!-- ===== HEADER ===== -->
+    <div class="row mt-3 mb-3">
+        <div class="col-12">
+            <div class="card bg-dark-transparent border-light-3">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <a href="{% url 'group_management' %}" class="btn btn-sm btn-secondary mr-3" style="border-radius:8px;">
+                                <i class="zmdi zmdi-arrow-left"></i>
+                            </a>
+                            <div>
+                                <h4 class="mb-0 text-white">
+                                    <i class="zmdi zmdi-layers mr-2" style="color:#adb5bd;"></i>{{ group.name }}
+                                </h4>
+                                <small class="text-muted">
+                                    <i class="zmdi zmdi-pin mr-1"></i>{{ group.get_building_display }}
+                                    &nbsp;·&nbsp; {{ group.get_floor_display }}
+                                    &nbsp;·&nbsp; Xona: <strong class="text-light">{{ group.room_number }}</strong>
+                                </small>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="d-flex align-items-center gap-2">
+                                <span id="hdr-online" style="background:rgba(76,175,80,0.15); color:#4caf50; border:1px solid rgba(76,175,80,0.4); padding:4px 12px; border-radius:20px; font-size:0.82rem; font-weight:600;">
+                                    <i class="zmdi zmdi-circle"></i> {{ online_count }} Online
+                                </span>
+                                <span style="background:rgba(255,255,255,0.07); color:#adb5bd; border:1px solid rgba(255,255,255,0.15); padding:4px 12px; border-radius:20px; font-size:0.82rem;">
+                                    Jami {{ total_count }} PC
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== STAT CARDS ===== -->
+    <div class="row mb-3">
+        <div class="col-6 col-md-3 mb-3">
+            <div class="stat-card text-white d-flex align-items-center gap-3">
+                <div class="stat-icon" style="background:rgba(33,150,243,0.15); color:#2196F3;">
+                    <i class="zmdi zmdi-desktop-windows"></i>
+                </div>
+                <div>
+                    <div class="stat-val" id="st-total">{{ total_count }}</div>
+                    <div class="stat-lbl">Jami PC</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 mb-3">
+            <div class="stat-card text-white d-flex align-items-center gap-3">
+                <div class="stat-icon" style="background:rgba(76,175,80,0.15); color:#4caf50;">
+                    <i class="zmdi zmdi-circle"></i>
+                </div>
+                <div>
+                    <div class="stat-val" id="st-online" style="color:#4caf50;">{{ online_count }}</div>
+                    <div class="stat-lbl">Online</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 mb-3">
+            <div class="stat-card text-white d-flex align-items-center gap-3">
+                <div class="stat-icon" style="background:rgba(255,82,82,0.15); color:#ff5252;">
+                    <i class="zmdi zmdi-circle-o"></i>
+                </div>
+                <div>
+                    <div class="stat-val" id="st-offline" style="color:#ff5252;">{{ offline_count }}</div>
+                    <div class="stat-lbl">Offline</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 mb-3">
+            <div class="stat-card text-white d-flex align-items-center gap-3">
+                <div class="stat-icon" style="background:rgba(255,152,0,0.15); color:#ffa726;">
+                    <i class="zmdi zmdi-chart-pie"></i>
+                </div>
+                <div>
+                    <div class="stat-val" id="st-pct" style="color:#ffa726;">
+                        {% if total_count %}{% widthratio online_count total_count 100 %}{% else %}0{% endif %}%
+                    </div>
+                    <div class="stat-lbl">Faollik</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MAIN ROW: PC GRID + COMMAND PANEL ===== -->
+    <div class="row">
+
+        <!-- PC GRID -->
+        <div class="col-lg-8 mb-3">
+            <div class="card bg-dark-transparent border-light-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0 text-white"><i class="zmdi zmdi-desktop-windows mr-1"></i> Xonadagi PC lar</h6>
+                        <small class="text-muted" id="refresh-label">15s da yangilanadi</small>
+                    </div>
+                    <div class="row" id="pc-grid">
+                        {% for pc in computers %}
+                        <div class="col-md-6 col-xl-4 mb-3">
+                            <div class="pc-card p-3 {% if pc.is_online %}online{% else %}offline{% endif %}"
+                                 id="pc-{{ pc.bios_uuid }}"
+                                 data-uuid="{{ pc.bios_uuid }}"
+                                 data-pk="{{ pc.id }}"
+                                 onclick="window.location='{% url 'device_detail' pc.id %}'">
+
+                                <!-- Header -->
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div style="min-width:0;">
+                                        <div class="d-flex align-items-center">
+                                            <span class="pc-status-dot {% if pc.is_online %}dot-online{% else %}dot-offline{% endif %}"></span>
+                                            <span class="text-white font-weight-bold" style="font-size:0.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                                {{ pc.hostname|default:"Nomsiz" }}
+                                            </span>
+                                        </div>
+                                        <div class="text-muted" style="font-size:0.72rem; margin-top:2px; margin-left:14px;">
+                                            {{ pc.bios_uuid|truncatechars:20 }}
+                                        </div>
+                                    </div>
+                                    <!-- Individual command dropdown -->
+                                    <div onclick="event.stopPropagation();">
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm" style="background:rgba(255,255,255,0.07); color:#adb5bd; border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:2px 7px;"
+                                                data-toggle="dropdown" {% if not pc.is_online %}disabled title="Oflayn"{% endif %}>
+                                                <i class="zmdi zmdi-more-vert"></i>
+                                            </button>
+                                            <div class="dropdown-menu dropdown-menu-right" style="background:rgba(20,20,30,0.97); border:1px solid rgba(255,255,255,0.15); min-width:160px;">
+                                                <button class="dropdown-item text-white" style="font-size:0.83rem;"
+                                                    onclick="sendCmd('lock','{{ pc.bios_uuid }}','{{ pc.hostname }}')">
+                                                    <i class="zmdi zmdi-lock mr-2" style="color:#2196F3;"></i> Ekranni Qulflash
+                                                </button>
+                                                <button class="dropdown-item text-white" style="font-size:0.83rem;"
+                                                    onclick="confirmSingleCmd('restart','{{ pc.bios_uuid }}','{{ pc.hostname }}')">
+                                                    <i class="zmdi zmdi-refresh mr-2" style="color:#ffa726;"></i> Qayta Ishga Tushirish
+                                                </button>
+                                                <button class="dropdown-item text-white" style="font-size:0.83rem;"
+                                                    onclick="confirmSingleCmd('shutdown','{{ pc.bios_uuid }}','{{ pc.hostname }}')">
+                                                    <i class="zmdi zmdi-power mr-2" style="color:#ff5252;"></i> O'chirish
+                                                </button>
+                                                <div class="dropdown-divider" style="border-color:rgba(255,255,255,0.1);"></div>
+                                                <button class="dropdown-item text-white" style="font-size:0.83rem;"
+                                                    onclick="openUrlSingle('{{ pc.bios_uuid }}','{{ pc.hostname }}')">
+                                                    <i class="zmdi zmdi-open-in-browser mr-2" style="color:#66bb6a;"></i> URL Ochish
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Metrics -->
+                                <div class="pc-metrics" id="metrics-{{ pc.bios_uuid }}">
+                                    {% with m=live_metrics|default_if_none:None %}
+                                    {% if pc.is_online %}
+                                        {% with met=live_metrics %}
+                                        {% if met %}
+                                        <div class="mb-1">
+                                            <div class="d-flex justify-content-between" style="font-size:0.72rem; color:#adb5bd;">
+                                                <span>CPU</span><span class="cpu-val text-white">—</span>
+                                            </div>
+                                            <div class="mini-bar-wrap"><div class="mini-bar cpu-bar" style="background:#2196F3; width:0%;"></div></div>
+                                        </div>
+                                        <div class="mb-1">
+                                            <div class="d-flex justify-content-between" style="font-size:0.72rem; color:#adb5bd;">
+                                                <span>RAM</span><span class="ram-val text-white">—</span>
+                                            </div>
+                                            <div class="mini-bar-wrap"><div class="mini-bar ram-bar" style="background:#9C27B0; width:0%;"></div></div>
+                                        </div>
+                                        <div class="d-flex justify-content-between mt-1" style="font-size:0.72rem; color:#adb5bd;">
+                                            <span><i class="zmdi zmdi-swap-vert" style="color:#009688;"></i> <span class="net-val">—</span> Kbps</span>
+                                        </div>
+                                        {% else %}
+                                        <div class="metrics-loading" style="font-size:0.75rem; color:#adb5bd; text-align:center; padding:6px 0;">
+                                            <i class="zmdi zmdi-time-restore" style="font-size:1rem;"></i> Metrikalar kutilmoqda...
+                                        </div>
+                                        {% endif %}
+                                        {% endwith %}
+                                    {% else %}
+                                    <div style="font-size:0.75rem; color:#555; text-align:center; padding:6px 0;">
+                                        <i class="zmdi zmdi-circle-o" style="color:#ff5252;"></i> Oflayn
+                                    </div>
+                                    {% endif %}
+                                    {% endwith %}
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="col-12 text-center py-4 text-muted">
+                            <i class="zmdi zmdi-desktop-windows" style="font-size:2.5rem; opacity:0.3;"></i>
+                            <p class="mt-2">Bu guruhda hali PC yo'q</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- COMMAND PANEL -->
+        <div class="col-lg-4 mb-3">
+            <div class="card bg-dark-transparent border-light-3" style="position:sticky; top:70px;">
+                <div class="card-body">
+                    <h6 class="text-white mb-1"><i class="zmdi zmdi-flash mr-1"></i> Buyruq Yuborish</h6>
+                    <div class="mb-3" id="cmd-online-info">
+                        <small style="color:#4caf50; font-size:0.78rem;">
+                            <i class="zmdi zmdi-circle"></i>
+                            <span id="cmd-online-count">{{ online_count }}</span> ta online PC ga yuboriladi
+                        </small>
+                        {% if online_count == 0 %}
+                        <div style="background:rgba(255,82,82,0.1); border:1px solid rgba(255,82,82,0.3); border-radius:6px; padding:6px 10px; margin-top:6px; font-size:0.78rem; color:#ff5252;">
+                            <i class="zmdi zmdi-alert-triangle mr-1"></i> Hozir online PC yo'q
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- LOCK -->
+                    <button class="cmd-btn cmd-lock" onclick="sendCmd('lock','','all')" {% if online_count == 0 %}disabled style="opacity:0.4; cursor:not-allowed;"{% endif %}>
+                        <i class="zmdi zmdi-lock"></i> Ekranni Qulflash
+                    </button>
+
+                    <!-- RESTART -->
+                    <button class="cmd-btn cmd-restart" onclick="openConfirm('restart')" {% if online_count == 0 %}disabled style="opacity:0.4; cursor:not-allowed;"{% endif %}>
+                        <i class="zmdi zmdi-refresh"></i> Qayta Ishga Tushirish
+                    </button>
+
+                    <!-- SHUTDOWN -->
+                    <button class="cmd-btn cmd-shutdown" onclick="openConfirm('shutdown')" {% if online_count == 0 %}disabled style="opacity:0.4; cursor:not-allowed;"{% endif %}>
+                        <i class="zmdi zmdi-power"></i> O'chirish
+                    </button>
+
+                    <hr style="border-color:rgba(255,255,255,0.1); margin:12px 0;">
+
+                    <!-- OPEN URL -->
+                    <div>
+                        <label class="text-muted" style="font-size:0.78rem; margin-bottom:5px;">URL Ochish</label>
+                        <input type="text" id="group-url-input" class="form-control input-glass mb-2"
+                            placeholder="https://example.com" style="font-size:0.85rem; border-radius:8px;">
+                        <button class="cmd-btn cmd-url" onclick="sendUrlCmd('','all')" {% if online_count == 0 %}disabled style="opacity:0.4; cursor:not-allowed;"{% endif %}>
+                            <i class="zmdi zmdi-open-in-browser"></i> Barcha Online PC da Ochish
+                        </button>
+                    </div>
+
+                    <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 12px; margin-top:8px;">
+                        <small class="text-muted" style="font-size:0.75rem; line-height:1.5;">
+                            <i class="zmdi zmdi-info-outline mr-1"></i>
+                            Buyruqlar faqat <strong class="text-white">online</strong> PC larga yetkaziladi.
+                            Restart va o'chirish uchun <strong class="text-white">10 soniya</strong> kechikish beriladi.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+</div>
+
+<!-- ===== CONFIRM MODAL (Restart / Shutdown) ===== -->
+<div class="modal fade" id="confirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content modal-glass">
+            <div class="modal-header">
+                <h5 class="modal-title text-white" id="confirmTitle">Tasdiqlang</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body text-white" id="confirmBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Bekor qilish</button>
+                <button type="button" class="btn px-4" id="confirmOkBtn" style="background:rgba(220,53,69,0.8); color:#fff; border:1px solid #dc3545;">
+                    Ha, yuborish
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SINGLE PC CONFIRM MODAL ===== -->
+<div class="modal fade" id="singleConfirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content modal-glass">
+            <div class="modal-header">
+                <h5 class="modal-title text-white" id="singleConfirmTitle">Tasdiqlang</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body text-white" id="singleConfirmBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Bekor qilish</button>
+                <button type="button" class="btn px-4" id="singleConfirmOkBtn" style="background:rgba(220,53,69,0.8); color:#fff; border:1px solid #dc3545;">
+                    Ha, yuborish
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SINGLE PC URL MODAL ===== -->
+<div class="modal fade" id="singleUrlModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content modal-glass">
+            <div class="modal-header">
+                <h5 class="modal-title text-white"><i class="zmdi zmdi-open-in-browser mr-1"></i> URL Ochish</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body text-white">
+                <label class="text-muted" style="font-size:0.82rem;">PC: <strong id="single-url-hostname" class="text-white"></strong></label>
+                <input type="text" id="single-url-input" class="form-control input-glass mt-1"
+                    placeholder="https://example.com">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Bekor qilish</button>
+                <button type="button" class="btn px-4 cmd-url" id="singleUrlOkBtn">
+                    <i class="zmdi zmdi-open-in-browser mr-1"></i> Ochish
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+var GROUP_PK = "{{ group.id }}";
+var METRICS_URL = "{% url 'group_metrics' group.id %}";
+var COMMAND_URL = "{% url 'group_command' group.id %}";
+var CSRF = "{{ csrf_token }}";
+
+// =========== TOAST ===========
+function showToast(msg, color) {
+    color = color || '#4caf50';
+    var box = document.getElementById('toast-box');
+    var el = document.createElement('div');
+    el.className = 'toast-item';
+    el.innerHTML = '<i class="zmdi zmdi-check-circle" style="color:' + color + '; font-size:1.1rem;"></i> ' + msg;
+    box.appendChild(el);
+    setTimeout(function(){ el.style.opacity='0'; el.style.transition='opacity 0.4s'; setTimeout(function(){el.remove();},400); }, 3500);
+}
+
+// =========== SEND COMMAND ===========
+function sendCmd(command, targetUuid, scope) {
+    var body = { command: command };
+    if (targetUuid) body.target_uuid = targetUuid;
+    fetch(COMMAND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify(body)
+    }).then(function(r){ return r.json(); }).then(function(d){
+        if (d.error) { showToast(d.error, '#ff5252'); return; }
+        var labels = { lock:'Ekran qulflandi', restart:'Qayta ishga tushirish buyrug\'i yuborildi', shutdown:'O\'chirish buyrug\'i yuborildi' };
+        showToast((labels[command] || 'Buyruq yuborildi') + ' → ' + d.sent + ' ta PC', '#4caf50');
+    }).catch(function(){ showToast('Xato yuz berdi', '#ff5252'); });
+}
+
+function sendUrlCmd(targetUuid, scope) {
+    var inputId = targetUuid ? 'single-url-input' : 'group-url-input';
+    var url = document.getElementById(inputId).value.trim();
+    if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+        showToast("To'g'ri URL kiriting (http:// yoki https://)", '#ff5252');
+        return;
+    }
+    var body = { command: 'open_url', url: url };
+    if (targetUuid) body.target_uuid = targetUuid;
+    fetch(COMMAND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify(body)
+    }).then(function(r){ return r.json(); }).then(function(d){
+        if (d.error) { showToast(d.error, '#ff5252'); return; }
+        showToast('URL yuborildi → ' + d.sent + ' ta PC', '#4caf50');
+        if (targetUuid) { $('#singleUrlModal').modal('hide'); }
+    }).catch(function(){ showToast('Xato yuz berdi', '#ff5252'); });
+}
+
+// =========== CONFIRM MODAL (Group) ===========
+var _pendingCmd = null;
+function openConfirm(command) {
+    _pendingCmd = command;
+    var onlineCnt = parseInt(document.getElementById('cmd-online-count').textContent);
+    var titles = { restart: 'Qayta Ishga Tushirish', shutdown: 'O\'chirish' };
+    var msgs = {
+        restart: '<div style="font-size:0.9rem;">Guruhning <strong class="text-white">' + onlineCnt + ' ta</strong> online PC si 10 soniyadan keyin qayta ishga tushiriladi.</div>',
+        shutdown: '<div style="font-size:0.9rem;">Guruhning <strong style="color:#ff5252;">' + onlineCnt + ' ta</strong> online PC si 10 soniyadan keyin o\'chiriladi.</div>',
+    };
+    document.getElementById('confirmTitle').textContent = titles[command];
+    document.getElementById('confirmBody').innerHTML = msgs[command];
+    $('#confirmModal').modal('show');
+}
+document.getElementById('confirmOkBtn').addEventListener('click', function(){
+    $('#confirmModal').modal('hide');
+    if (_pendingCmd) sendCmd(_pendingCmd, '', 'all');
+    _pendingCmd = null;
+});
+
+// =========== SINGLE PC CONFIRM ===========
+var _singleCmd = null, _singleUuid = null;
+function confirmSingleCmd(command, uuid, hostname) {
+    _singleCmd = command; _singleUuid = uuid;
+    var titles = { restart: 'Qayta Ishga Tushirish', shutdown: 'O\'chirish' };
+    var msgs = {
+        restart: '<strong class="text-white">' + hostname + '</strong> kompyuteri 10 soniyadan keyin qayta ishga tushiriladi.',
+        shutdown: '<strong style="color:#ff5252;">' + hostname + '</strong> kompyuteri 10 soniyadan keyin o\'chiriladi.',
+    };
+    document.getElementById('singleConfirmTitle').textContent = titles[command];
+    document.getElementById('singleConfirmBody').innerHTML = msgs[command];
+    $('#singleConfirmModal').modal('show');
+}
+document.getElementById('singleConfirmOkBtn').addEventListener('click', function(){
+    $('#singleConfirmModal').modal('hide');
+    if (_singleCmd && _singleUuid) sendCmd(_singleCmd, _singleUuid, 'single');
+    _singleCmd = null; _singleUuid = null;
+});
+
+// =========== SINGLE PC URL MODAL ===========
+var _singleUrlUuid = null;
+function openUrlSingle(uuid, hostname) {
+    _singleUrlUuid = uuid;
+    document.getElementById('single-url-hostname').textContent = hostname;
+    document.getElementById('single-url-input').value = '';
+    $('#singleUrlModal').modal('show');
+}
+document.getElementById('singleUrlOkBtn').addEventListener('click', function(){
+    if (_singleUrlUuid) sendUrlCmd(_singleUrlUuid, 'single');
+});
+
+// =========== METRICS POLLING ===========
+function cpuColor(v) { return v > 90 ? '#f44336' : v > 70 ? '#FF9800' : '#2196F3'; }
+function ramColor(v) { return v > 90 ? '#f44336' : v > 70 ? '#FF9800' : '#9C27B0'; }
+
+function updatePcCard(uuid, info) {
+    var card = document.getElementById('pc-' + uuid);
+    if (!card) return;
+
+    var isOnline = info.is_online;
+    card.className = 'pc-card p-3 ' + (isOnline ? 'online' : 'offline');
+
+    var dot = card.querySelector('.pc-status-dot');
+    if (dot) { dot.className = 'pc-status-dot ' + (isOnline ? 'dot-online' : 'dot-offline'); }
+
+    var metricsDiv = card.querySelector('.pc-metrics');
+    if (!metricsDiv) return;
+
+    var m = info.metrics;
+    if (!isOnline) {
+        metricsDiv.innerHTML = '<div style="font-size:0.75rem; color:#555; text-align:center; padding:6px 0;"><i class="zmdi zmdi-circle-o" style="color:#ff5252;"></i> Oflayn</div>';
+        return;
+    }
+    if (!m || Object.keys(m).length === 0) {
+        metricsDiv.innerHTML = '<div class="metrics-loading" style="font-size:0.75rem; color:#adb5bd; text-align:center; padding:6px 0;"><i class="zmdi zmdi-time-restore" style="font-size:1rem;"></i> Metrikalar kutilmoqda...</div>';
+        return;
+    }
+
+    var cpu = parseFloat(m.cpu || 0);
+    var ramMb = parseFloat(m.ram_used_mb || 0);
+    var net = parseFloat(m.network || 0);
+
+    // Estimate RAM % from first drive (no, use ram_used_mb and assume ~8GB for bar)
+    var ramPct = Math.min(100, (ramMb / 8192) * 100);
+
+    metricsDiv.innerHTML =
+        '<div class="mb-1">' +
+        '  <div class="d-flex justify-content-between" style="font-size:0.72rem; color:#adb5bd;">' +
+        '    <span>CPU</span><span class="text-white" style="font-weight:600;">' + cpu.toFixed(1) + '%</span>' +
+        '  </div>' +
+        '  <div class="mini-bar-wrap"><div class="mini-bar" style="background:' + cpuColor(cpu) + '; width:' + cpu + '%;"></div></div>' +
+        '</div>' +
+        '<div class="mb-1">' +
+        '  <div class="d-flex justify-content-between" style="font-size:0.72rem; color:#adb5bd;">' +
+        '    <span>RAM</span><span class="text-white" style="font-weight:600;">' + Math.round(ramMb) + ' MB</span>' +
+        '  </div>' +
+        '  <div class="mini-bar-wrap"><div class="mini-bar" style="background:' + ramColor(ramPct) + '; width:' + ramPct + '%;"></div></div>' +
+        '</div>' +
+        '<div class="d-flex justify-content-between mt-1" style="font-size:0.72rem; color:#adb5bd;">' +
+        '  <span><i class="zmdi zmdi-swap-vert" style="color:#009688;"></i> ' + Math.round(net) + ' Kbps</span>' +
+        '</div>';
+}
+
+function pollMetrics() {
+    fetch(METRICS_URL).then(function(r){ return r.json(); }).then(function(d){
+        var pcs = d.pcs || {};
+        var onlineCount = d.online_count || 0;
+        var totalCount  = d.total_count  || 0;
+
+        // Update stat cards
+        document.getElementById('st-online').textContent  = onlineCount;
+        document.getElementById('st-offline').textContent = totalCount - onlineCount;
+        document.getElementById('st-total').textContent   = totalCount;
+        var pct = totalCount > 0 ? Math.round(onlineCount / totalCount * 100) : 0;
+        document.getElementById('st-pct').textContent = pct + '%';
+        document.getElementById('cmd-online-count').textContent = onlineCount;
+        document.getElementById('hdr-online').innerHTML = '<i class="zmdi zmdi-circle"></i> ' + onlineCount + ' Online';
+
+        // Update each PC card
+        Object.keys(pcs).forEach(function(uuid){
+            updatePcCard(uuid, pcs[uuid]);
+        });
+
+        // Enable/disable group command buttons
+        var groupBtns = document.querySelectorAll('.cmd-btn');
+        groupBtns.forEach(function(btn){
+            if (!btn.closest('#singleConfirmModal') && !btn.closest('#singleUrlModal')) {
+                btn.disabled = onlineCount === 0;
+                btn.style.opacity = onlineCount === 0 ? '0.4' : '1';
+                btn.style.cursor  = onlineCount === 0 ? 'not-allowed' : 'pointer';
+            }
+        });
+    }).catch(function(){});
+}
+
+// Initial metrics injection from server
+{% for pc in computers %}
+{% if pc.is_online %}
+(function(){
+    var uuid = '{{ pc.bios_uuid }}';
+    {% with met=live_metrics %}
+    // Server side initial render — JS poll will override immediately
+    {% endwith %}
+})();
+{% endif %}
+{% endfor %}
+
+// Poll immediately, then every 15s
+pollMetrics();
+setInterval(pollMetrics, 15000);
+
+// Countdown label
+var countdownSec = 15;
+setInterval(function(){
+    countdownSec--;
+    if (countdownSec <= 0) countdownSec = 15;
+    var el = document.getElementById('refresh-label');
+    if (el) el.textContent = countdownSec + 's da yangilanadi';
+}, 1000);
+</script>
+
+{% endblock content %}

@@ -13,7 +13,8 @@ from django.core.paginator import Paginator
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.contrib.auth.decorators import login_required
-from tracking.models import AppUsageStatistic, ActivityLog, BlockedAttemptLog, ProcessAlertLog, ScreenShareSession
+from tracking.models import AppUsageStatistic, ActivityLog, BlockedAttemptLog, ProcessAlertLog, ScreenShareSession, BlockedURL, BlockedProcess
+from endpoints.consumers import LIVE_METRICS
 import json
 import hashlib
 from datetime import datetime
@@ -268,6 +269,10 @@ def check_session_status_view(request, session_id):
 
 def device_detail_view(request, pk):
     computer = get_object_or_404(Computer, id=pk)
+
+    if request.GET.get('metrics_only') == '1':
+        return JsonResponse(LIVE_METRICS.get(computer.bios_uuid) or {})
+
     current_tab = request.GET.get('tab', 'usage')
     search_query = request.GET.get('search', '')
     
@@ -288,6 +293,7 @@ def device_detail_view(request, pk):
         'time_filter': time_filter,
         'secure_token': get_secure_token(),
         'latest_stream_url': latest_stream_url,
+        'live_metrics': LIVE_METRICS.get(computer.bios_uuid),
     }
 
     # ==========================================
@@ -368,4 +374,198 @@ def device_detail_view(request, pk):
         context['page_obj'] = paginator.get_page(page_number)
 
     return render(request, 'menu/device/device_detail.html', context)
+
+
+def group_detail_view(request, pk):
+    group = get_object_or_404(Group, id=pk)
+    computers = Computer.objects.filter(group=group).order_by('hostname')
+
+    total_count = computers.count()
+    online_count = computers.filter(is_online=True).count()
+
+    context = {
+        'group': group,
+        'computers': computers,
+        'total_count': total_count,
+        'online_count': online_count,
+        'offline_count': total_count - online_count,
+        'live_metrics': LIVE_METRICS,
+    }
+    return render(request, 'menu/groups/group_detail.html', context)
+
+
+def group_metrics_view(request, pk):
+    group = get_object_or_404(Group, id=pk)
+    computers = Computer.objects.filter(group=group).values('bios_uuid', 'hostname', 'is_online', 'id')
+
+    result = {}
+    for pc in computers:
+        result[pc['bios_uuid']] = {
+            'hostname': pc['hostname'],
+            'is_online': pc['is_online'],
+            'pk': pc['id'],
+            'metrics': LIVE_METRICS.get(pc['bios_uuid']) or {},
+        }
+    online_total = sum(1 for v in result.values() if v['is_online'])
+    return JsonResponse({'pcs': result, 'online_count': online_total, 'total_count': len(result)})
+
+
+def group_command_view(request, pk):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    group = get_object_or_404(Group, id=pk)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    command = data.get('command', '')
+    url_param = data.get('url', '').strip()
+    target_uuid = data.get('target_uuid', '')
+
+    command_map = {
+        'lock':     'rundll32.exe user32.dll,LockWorkStation',
+        'restart':  'shutdown /r /t 10',
+        'shutdown': 'shutdown /s /t 10',
+    }
+
+    if command == 'open_url':
+        if not url_param or not (url_param.startswith('http://') or url_param.startswith('https://')):
+            return JsonResponse({'error': "To'g'ri URL kiriting (http:// yoki https://)"}, status=400)
+        shell_cmd = f'cmd.exe /c start {url_param}'
+    elif command in command_map:
+        shell_cmd = command_map[command]
+    else:
+        return JsonResponse({'error': "Noto'g'ri buyruq"}, status=400)
+
+    channel_layer = get_channel_layer()
+
+    if target_uuid:
+        computer = get_object_or_404(Computer, bios_uuid=target_uuid, group=group)
+        if not computer.is_online:
+            return JsonResponse({'error': 'Bu PC oflayn', 'sent': 0})
+        async_to_sync(channel_layer.group_send)(
+            f'pc_{target_uuid}',
+            {'type': 'execute_command', 'data': {'type': 'do_command', 'action': shell_cmd, 'message': '', 'payload': {}}}
+        )
+        sent = 1
+    else:
+        online_count = Computer.objects.filter(group=group, is_online=True).count()
+        async_to_sync(channel_layer.group_send)(
+            f'group_{pk}',
+            {'type': 'execute_command', 'data': {'type': 'do_command', 'action': shell_cmd, 'message': '', 'payload': {}}}
+        )
+        sent = online_count
+
+    return JsonResponse({'status': 'ok', 'sent': sent})
+
+
+def blocked_urls_view(request):
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'create':
+            url_address = request.POST.get('url_address', '').strip()
+            if url_address:
+                BlockedURL.objects.get_or_create(url_address=url_address)
+                messages.success(request, f"'{url_address}' muvaffaqiyatli bloklandi!")
+            return redirect('blocked_urls')
+
+        elif action == 'update':
+            obj_id = request.POST.get('obj_id')
+            obj = get_object_or_404(BlockedURL, id=obj_id)
+            obj.url_address = request.POST.get('url_address', '').strip()
+            obj.save()
+            messages.success(request, "URL muvaffaqiyatli yangilandi!")
+            return redirect('blocked_urls')
+
+        elif action == 'delete':
+            obj_id = request.POST.get('obj_id')
+            get_object_or_404(BlockedURL, id=obj_id).delete()
+            messages.success(request, "URL o'chirildi!")
+            return redirect('blocked_urls')
+
+    search_query = request.GET.get('search', '')
+    urls_qs = BlockedURL.objects.all().order_by('-created_at')
+    if search_query:
+        urls_qs = urls_qs.filter(url_address__icontains=search_query)
+
+    # Top 5 eng ko'p urinish bo'lgan URLlar
+    top_attempts = (
+        BlockedAttemptLog.objects
+        .values('url__url_address', 'url__id')
+        .annotate(total=Sum('attempts_count'))
+        .order_by('-total')[:5]
+    )
+
+    paginator = Paginator(urls_qs, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'menu/blocked_urls/blocked_urls.html', {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'top_attempts': top_attempts,
+    })
+
+
+def blocked_processes_view(request):
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'create':
+            name = request.POST.get('name', '').strip()
+            match_type = request.POST.get('match_type', 'PROCESS')
+            description = request.POST.get('description', '').strip()
+            if name:
+                BlockedProcess.objects.get_or_create(
+                    name=name,
+                    defaults={'match_type': match_type, 'description': description}
+                )
+                messages.success(request, f"'{name}' jarayoni muvaffaqiyatli bloklandi!")
+            return redirect('blocked_processes')
+
+        elif action == 'update':
+            obj_id = request.POST.get('obj_id')
+            obj = get_object_or_404(BlockedProcess, id=obj_id)
+            obj.name = request.POST.get('name', '').strip()
+            obj.match_type = request.POST.get('match_type', 'PROCESS')
+            obj.description = request.POST.get('description', '').strip()
+            obj.save()
+            messages.success(request, "Jarayon muvaffaqiyatli yangilandi!")
+            return redirect('blocked_processes')
+
+        elif action == 'delete':
+            obj_id = request.POST.get('obj_id')
+            get_object_or_404(BlockedProcess, id=obj_id).delete()
+            messages.success(request, "Jarayon o'chirildi!")
+            return redirect('blocked_processes')
+
+    search_query = request.GET.get('search', '')
+    match_filter = request.GET.get('match_type', '')
+    procs_qs = BlockedProcess.objects.all().order_by('-created_at')
+    if search_query:
+        procs_qs = procs_qs.filter(name__icontains=search_query)
+    if match_filter:
+        procs_qs = procs_qs.filter(match_type=match_filter)
+
+    # Top 5 eng ko'p bloklangan jarayonlar
+    top_blocked = (
+        ProcessAlertLog.objects
+        .values('process_rule__name', 'process_rule__id')
+        .annotate(total=Sum('attempts_count'))
+        .order_by('-total')[:5]
+    )
+
+    paginator = Paginator(procs_qs, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'menu/blocked_processes/blocked_processes.html', {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'match_filter': match_filter,
+        'top_blocked': top_blocked,
+        'match_choices': BlockedProcess.MATCH_CHOICES,
+    })
     

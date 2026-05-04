@@ -62,14 +62,21 @@
                                 </thead>
                                 <tbody>
                                     {% for group in page_obj %}
-                                    <tr onclick="if(!event.target.closest('button')) { $('#detailModal{{ group.id }}').modal('show'); }" style="cursor: pointer;" title="Batafsil ko'rish uchun bosing">
+                                    <tr onclick="if(!event.target.closest('button') && !event.target.closest('a')) { window.location='{% url 'group_detail' group.id %}'; }" style="cursor: pointer;" title="Dashboard ni ko'rish uchun bosing">
                                         <th scope="row">{{ group.id }}</th>
-                                        <td>{{ group.name }}</td>
+                                        <td>
+                                            <a href="{% url 'group_detail' group.id %}" class="font-weight-bold" style="text-decoration:none;">
+                                                {{ group.name }}
+                                            </a>
+                                        </td>
                                         <td>{{ group.get_building_display }}</td>
                                         <td>{{ group.get_floor_display }}</td>
                                         <td>{{ group.room_number }}</td>
-                                        
+
                                         <td class="text-right">
+                                            <a href="{% url 'group_detail' group.id %}" class="btn btn-sm btn-light m-1" title="Dashboard">
+                                                <i class="zmdi zmdi-desktop-windows"></i>
+                                            </a>
                                             <button type="button" class="btn btn-sm btn-light m-1" data-toggle="modal" data-target="#updateModal{{ group.id }}" title="Tahrirlash">
                                                 <i class="zmdi zmdi-edit"></i>
                                             </button>

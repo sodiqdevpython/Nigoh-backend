@@ -1,0 +1,422 @@
+{% extends "base/base.html" %}
+{% block content %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+    .bg-dark-transparent {
+        background-color: rgba(0, 0, 0, 0.45) !important;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+    .bg-glass {
+        background-color: rgba(0, 0, 0, 0.3) !important;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+    .border-light-3 { border: 1px solid rgba(255, 255, 255, 0.15) !important; }
+    .text-white { color: #ffffff !important; text-shadow: 0px 1px 3px rgba(0,0,0,0.8); }
+    .text-muted { color: #adb5bd !important; }
+    .table-glass { color: #f8f9fa; }
+    .table-glass th { border-bottom: 2px solid rgba(255,255,255,0.1); border-top: none; font-weight: 600; color: #fff; }
+    .table-glass td { border-top: 1px solid rgba(255,255,255,0.05); background-color: transparent !important; vertical-align: middle; }
+    .table-hover.table-glass tbody tr:hover td { background-color: rgba(255,255,255,0.08) !important; color: #fff; }
+    .stat-rank {
+        width: 28px; height: 28px; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 0.8rem;
+        background: rgba(255,152,0,0.2); color: #ffa726;
+        border: 1px solid rgba(255,152,0,0.4);
+        flex-shrink: 0;
+    }
+    .modal-glass {
+        background: rgba(20,20,30,0.95);
+        border: 1px solid rgba(255,255,255,0.15);
+        backdrop-filter: blur(12px);
+    }
+    .modal-glass .modal-header { border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .modal-glass .modal-footer { border-top: 1px solid rgba(255,255,255,0.1); }
+    .input-glass {
+        background: rgba(255,255,255,0.1) !important;
+        border: 1px solid rgba(255,255,255,0.2) !important;
+        color: #fff !important;
+    }
+    .input-glass::placeholder { color: rgba(255,255,255,0.4); }
+    .input-glass option { background: #1a1a2e; color: #fff; }
+</style>
+
+<div class="content-wrapper">
+    <div class="container-fluid">
+
+        {% if messages %}
+            <div class="row mt-3">
+                <div class="col-lg-12">
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible" role="alert">
+                            <button type="button" class="close" data-dismiss="alert">&times;</button>
+                            <div class="alert-message"><span>{{ message }}</span></div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- STATISTIKA + CHART -->
+        {% if top_blocked %}
+        <div class="row mt-3">
+
+            <!-- PIE CHART -->
+            <div class="col-lg-4 mb-3">
+                <div class="card bg-dark-transparent border-light-3 h-100">
+                    <div class="card-body text-white">
+                        <h6 class="mb-3"><i class="zmdi zmdi-chart-donut mr-1"></i> Bloklashlar Taqsimoti</h6>
+                        <div style="position:relative; max-height:220px;">
+                            <canvas id="procPieChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TOP LIST -->
+            <div class="col-lg-8 mb-3">
+                <div class="card bg-dark-transparent border-light-3 h-100">
+                    <div class="card-body text-white">
+                        <h6 class="mb-3"><i class="zmdi zmdi-trending-up mr-1"></i> Eng Ko'p Bloklangan Jarayonlar (Top 5)</h6>
+                        {% for item in top_blocked %}
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="stat-rank mr-3">{{ forloop.counter }}</span>
+                            <div class="flex-grow-1" style="min-width:0;">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="text-warning font-weight-bold" style="font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                        {{ item.process_rule__name }}
+                                    </span>
+                                    <span class="ml-2 flex-shrink-0 text-white" style="font-size:0.85rem; font-weight:600;">{{ item.total }}</span>
+                                </div>
+                                <div class="progress" style="height:5px; background:rgba(255,255,255,0.1); border-radius:3px;">
+                                    <div class="progress-bar bg-warning" style="width:{% widthratio item.total top_blocked.0.total 100 %}%; border-radius:3px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        {% endif %}
+
+        <!-- ASOSIY JADVAL -->
+        <div class="row mt-1">
+            <div class="col-lg-12">
+                <div class="card bg-dark-transparent border-light-3">
+                    <div class="card-body text-white">
+
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h5 class="card-title mb-0 text-white">
+                                <i class="zmdi zmdi-close-circle mr-1"></i> Bloklangan Jarayonlar
+                                <span class="badge badge-secondary ml-2">{{ page_obj.paginator.count }}</span>
+                            </h5>
+                            <button type="button" class="btn btn-sm px-4 py-2" data-toggle="modal" data-target="#createModal"
+                                style="background:rgba(255,152,0,0.8); color:#fff; border:1px solid #ff9800;">
+                                <i class="zmdi zmdi-plus-circle"></i> Yangi Qo'shish
+                            </button>
+                        </div>
+
+                        <!-- FILTR & QIDIRUV -->
+                        <form method="get" class="row mb-4">
+                            <div class="col-md-5 form-group mb-0">
+                                <input type="text" name="search" value="{{ search_query }}"
+                                    class="form-control input-glass"
+                                    placeholder="Jarayon nomi bo'yicha qidirish...">
+                            </div>
+                            <div class="col-md-3 form-group mb-0">
+                                <select name="match_type" class="form-control input-glass">
+                                    <option value="">Barcha turlar</option>
+                                    {% for value, label in match_choices %}
+                                        <option value="{{ value }}" {% if value == match_filter %}selected{% endif %}>
+                                            {{ label }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4 form-group mb-0">
+                                <button type="submit" class="btn btn-light px-4">
+                                    <i class="zmdi zmdi-search"></i> Qidirish
+                                </button>
+                                <a href="{% url 'blocked_processes' %}" class="btn btn-secondary px-4">
+                                    <i class="zmdi zmdi-refresh"></i> Tozalash
+                                </a>
+                            </div>
+                        </form>
+
+                        <!-- JADVAL -->
+                        <div class="table-responsive">
+                            <table class="table table-hover table-glass">
+                                <thead>
+                                    <tr>
+                                        <th>#ID</th>
+                                        <th>Jarayon Nomi</th>
+                                        <th>Tur</th>
+                                        <th>Bloklashlar</th>
+                                        <th>Izoh</th>
+                                        <th>Qo'shilgan</th>
+                                        <th class="text-right">Amallar</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in page_obj %}
+                                    <tr>
+                                        <td class="text-muted">{{ item.id }}</td>
+                                        <td>
+                                            <code style="color:#ffa726; background:rgba(255,152,0,0.1); padding:2px 6px; border-radius:4px;">
+                                                {{ item.name }}
+                                            </code>
+                                        </td>
+                                        <td>
+                                            <span style="background:rgba({% if item.match_type == 'PROCESS' %}38,198,218{% else %}108,117,125{% endif %},0.15); color:{% if item.match_type == 'PROCESS' %}#26c6da{% else %}#adb5bd{% endif %}; border:1px solid rgba({% if item.match_type == 'PROCESS' %}38,198,218{% else %}108,117,125{% endif %},0.4); padding:2px 8px; border-radius:12px; font-size:0.78rem; font-weight:600;">
+                                                {{ item.get_match_type_display }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span style="background:rgba({% if item.blocked_count > 0 %}255,152,0{% else %}108,117,125{% endif %},0.2); color:{% if item.blocked_count > 0 %}#ffa726{% else %}#adb5bd{% endif %}; border:1px solid rgba({% if item.blocked_count > 0 %}255,152,0{% else %}108,117,125{% endif %},0.4); padding:2px 8px; border-radius:12px; font-size:0.8rem; font-weight:600;">
+                                                {{ item.blocked_count }}
+                                            </span>
+                                        </td>
+                                        <td class="text-muted" style="font-size:0.85rem; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ item.description }}">
+                                            {{ item.description|default:"—" }}
+                                        </td>
+                                        <td class="text-muted" style="font-size:0.85rem;">
+                                            {{ item.created_at|date:"d.m.Y H:i" }}
+                                        </td>
+                                        <td class="text-right">
+                                            <button class="btn btn-sm btn-light m-1"
+                                                data-toggle="modal" data-target="#updateModal{{ item.id }}" title="Tahrirlash">
+                                                <i class="zmdi zmdi-edit"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-light m-1"
+                                                data-toggle="modal" data-target="#deleteModal{{ item.id }}" title="O'chirish">
+                                                <i class="zmdi zmdi-delete"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="7" class="text-center py-5 text-muted">
+                                            <i class="zmdi zmdi-info-outline" style="font-size:2rem;"></i>
+                                            <p class="mt-2 mb-0">Hech qanday bloklangan jarayon topilmadi</p>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- PAGINATION -->
+                        {% if page_obj.has_other_pages %}
+                        <ul class="pagination justify-content-center mt-4">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&search={{ search_query }}&match_type={{ match_filter }}">Oldingi</a>
+                                </li>
+                            {% endif %}
+                            {% for i in page_obj.paginator.page_range %}
+                                {% if page_obj.number == i %}
+                                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                                {% else %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ i }}&search={{ search_query }}&match_type={{ match_filter }}">{{ i }}</a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&search={{ search_query }}&match_type={{ match_filter }}">Keyingi</a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                        {% endif %}
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- CREATE MODAL -->
+<div class="modal fade" id="createModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content modal-glass">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="create">
+                <div class="modal-header">
+                    <h5 class="modal-title text-white"><i class="zmdi zmdi-plus-circle mr-1"></i> Yangi Jarayon Bloklash</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body text-white">
+                    <div class="form-group">
+                        <label class="text-muted">Jarayon Nomi</label>
+                        <input type="text" name="name" class="form-control input-glass"
+                            placeholder="masalan: telegram yoki chrome.exe" required>
+                        <small class="text-muted">.exe kengaytmasini yozish shart emas</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="text-muted">Moslashtirish Turi</label>
+                        <select name="match_type" class="form-control input-glass" required>
+                            {% for value, label in match_choices %}
+                                <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="text-muted">Izoh <small>(ixtiyoriy)</small></label>
+                        <textarea name="description" class="form-control input-glass" rows="2"
+                            placeholder="Nima sababdan taqiqlangani..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Bekor qilish</button>
+                    <button type="submit" class="btn px-4" style="background:rgba(255,152,0,0.8); color:#fff; border:1px solid #ff9800;">
+                        <i class="zmdi zmdi-close-circle mr-1"></i> Bloklash
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- UPDATE & DELETE MODALS -->
+{% for item in page_obj %}
+
+<div class="modal fade" id="updateModal{{ item.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content modal-glass">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update">
+                <input type="hidden" name="obj_id" value="{{ item.id }}">
+                <div class="modal-header">
+                    <h5 class="modal-title text-white">Jarayon Tahrirlash</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body text-white">
+                    <div class="form-group">
+                        <label class="text-muted">Jarayon Nomi</label>
+                        <input type="text" name="name" class="form-control input-glass" value="{{ item.name }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="text-muted">Moslashtirish Turi</label>
+                        <select name="match_type" class="form-control input-glass" required>
+                            {% for value, label in match_choices %}
+                                <option value="{{ value }}" {% if item.match_type == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="text-muted">Izoh</label>
+                        <textarea name="description" class="form-control input-glass" rows="2">{{ item.description|default:"" }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Bekor qilish</button>
+                    <button type="submit" class="btn btn-light px-4">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteModal{{ item.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content modal-glass">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="obj_id" value="{{ item.id }}">
+                <div class="modal-header">
+                    <h5 class="modal-title text-white">O'chirishni tasdiqlang</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body text-white">
+                    <code style="color:#ffa726;">{{ item.name }}</code> jarayonini o'chirib tashlashga ishonchingiz komilmi?
+                    {% if item.blocked_count > 0 %}
+                    <div class="mt-2 p-2" style="background:rgba(255,193,7,0.1); border:1px solid rgba(255,193,7,0.3); border-radius:6px; font-size:0.85rem; color:#ffc107;">
+                        <i class="zmdi zmdi-alert-triangle mr-1"></i> Bu jarayon {{ item.blocked_count }} marta bloklangan.
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Yo'q</button>
+                    <button type="submit" class="btn btn-light text-danger px-4">Ha, o'chirish</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endfor %}
+
+{% if top_blocked %}
+<script>
+(function() {
+    var labels = [{% for item in top_blocked %}"{{ item.process_rule__name }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+    var data   = [{% for item in top_blocked %}{{ item.total }}{% if not forloop.last %},{% endif %}{% endfor %}];
+    var colors = ['#ffa726','#ff7043','#ef5350','#26c6da','#66bb6a'];
+
+    var ctx = document.getElementById('procPieChart');
+    if (!ctx) return;
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors.map(function(c){ return c + 'cc'; }),
+                borderColor: colors,
+                borderWidth: 2,
+                hoverOffset: 8,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#adb5bd', font: { size: 11 }, padding: 10,
+                        generateLabels: function(chart) {
+                            var ds = chart.data;
+                            return ds.labels.map(function(lbl, i) {
+                                var short = lbl.length > 20 ? lbl.substring(0,20)+'…' : lbl;
+                                return {
+                                    text: short,
+                                    fillStyle: ds.datasets[0].backgroundColor[i],
+                                    strokeStyle: ds.datasets[0].borderColor[i],
+                                    lineWidth: 2,
+                                    index: i,
+                                    hidden: false,
+                                };
+                            });
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            return ' ' + ctx.label + ': ' + ctx.parsed + ' ta';
+                        }
+                    }
+                }
+            },
+            cutout: '60%',
+        }
+    });
+})();
+</script>
+{% endif %}
+
+{% endblock content %}

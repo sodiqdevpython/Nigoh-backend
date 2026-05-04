@@ -3,6 +3,10 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Computer
 
+# DB ga saqlanmaydi — faqat xotirada yashaydi
+# { bios_uuid: { 'cpu': 34.5, 'ram': 4096, 'disk': 12.3, 'network': 128.7 } }
+LIVE_METRICS = {}
+
 class ComputerConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.bios_uuid = self.scope['url_route']['kwargs']['bios_uuid']
@@ -36,12 +40,22 @@ class ComputerConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_discard(self.group_room_name, self.channel_name)
         
         await self.set_online_status(is_online=False)
+        LIVE_METRICS.pop(self.bios_uuid, None)
         print(f"[-] Uzildi: {self.bios_uuid}")
 
     async def receive(self, text_data):
         data = json.loads(text_data)
-        print(f"[{self.bios_uuid}] dan javob/statistika: {data}")
         await self.update_last_seen()
+
+        if data.get('type') == 'metrics':
+            payload = data.get('payload', {})
+            LIVE_METRICS[self.bios_uuid] = {
+                'cpu':         payload.get('cpu', 0),
+                'ram_used_mb': payload.get('ram_used_mb', 0),
+                'drives':      payload.get('drives', []),
+                'network':     payload.get('network', 0),
+            }
+            print(f"[{self.bios_uuid}] metrikalar: {LIVE_METRICS[self.bios_uuid]}")
 
     # --- ADMIN YUBORETGAN BUYRUQLARNI QABUL QILISH UCHUN EVENT HANDLER ---
     async def execute_command(self, event):

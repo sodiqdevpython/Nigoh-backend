@@ -12,6 +12,7 @@ constantly==23.10.4
 cryptography==46.0.5
 daphne==4.2.1
 Django==4.2
+django-environ==0.13.0
 djangorestframework==3.16.1
 drf-yasg==1.21.15
 Faker==40.13.0

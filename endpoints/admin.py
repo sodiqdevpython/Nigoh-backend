@@ -3,9 +3,11 @@ from django.urls import reverse
 from django.contrib import admin, messages
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
+from django.utils.html import format_html, mark_safe
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Group, Computer
+from .consumers import LIVE_METRICS
 
 # --- SOCKET ORQALI BUYRUQ YUBORISH FUNKSIYASI ---
 def send_socket_command(room_name, action_name, extra_data=None):
@@ -65,9 +67,57 @@ class GroupAdmin(admin.ModelAdmin):
 
 @admin.register(Computer)
 class ComputerAdmin(admin.ModelAdmin):
-    list_display = ('hostname', 'bios_uuid', 'group', 'is_online', 'last_seen')
+    list_display = (
+        'hostname', 'bios_uuid', 'group', 'is_online',
+        'cpu_display', 'ram_display', 'disk_display', 'network_display',
+        'last_seen',
+    )
     list_filter = ('is_online', 'group')
     search_fields = ('hostname', 'bios_uuid')
+
+    def _m(self, obj):
+        return LIVE_METRICS.get(obj.bios_uuid)
+
+    def cpu_display(self, obj):
+        m = self._m(obj)
+        if not m:
+            return '—'
+        v = m['cpu']
+        color = '#f44336' if v > 90 else '#FF9800' if v > 70 else '#2196F3'
+        return format_html('<span style="color:{}">{} %</span>', color, v)
+    cpu_display.short_description = 'CPU'
+
+    def ram_display(self, obj):
+        m = self._m(obj)
+        if not m:
+            return '—'
+        mb = int(m.get('ram_used_mb', 0))
+        return format_html('<span style="color:#9C27B0">{} MB</span>', mb)
+    ram_display.short_description = 'RAM (ishl.)'
+
+    def disk_display(self, obj):
+        m = self._m(obj)
+        if not m:
+            return '—'
+        drives = m.get('drives', [])
+        parts  = []
+        for d in drives:
+            pct   = d.get('used_percent', 0)
+            color = '#f44336' if pct > 90 else '#FF9800' if pct > 70 else '#4CAF50'
+            parts.append(format_html(
+                '<span style="color:{}">{}: {}/{} GB ({}%)</span>',
+                color, d.get('letter', '?'),
+                d.get('used_gb', 0), d.get('total_gb', 0), pct
+            ))
+        return mark_safe(' &nbsp;|&nbsp; '.join(str(p) for p in parts)) if parts else '—'
+    disk_display.short_description = 'Disk'
+
+    def network_display(self, obj):
+        m = self._m(obj)
+        if not m:
+            return '—'
+        return format_html('<span style="color:#009688">{} Kbps</span>', m['network'])
+    network_display.short_description = 'Tarmoq'
     
     # Yangi dinamik harakatni ro'yxatga qo'shamiz
     actions = ['send_custom_command']

@@ -13,4 +13,11 @@ urlpatterns = [
     path('remote-control/request/<str:bios_uuid>/', v.create_remote_session_view, name='remote_control_request'),
     
     path('remote-control/status/<str:session_id>/', v.check_session_status_view, name='remote_control_status'),
+
+    path('groups/<uuid:pk>/', v.group_detail_view, name='group_detail'),
+    path('groups/<uuid:pk>/metrics/', v.group_metrics_view, name='group_metrics'),
+    path('groups/<uuid:pk>/command/', v.group_command_view, name='group_command'),
+
+    path('blocked-urls/', v.blocked_urls_view, name='blocked_urls'),
+    path('blocked-processes/', v.blocked_processes_view, name='blocked_processes'),
 ]

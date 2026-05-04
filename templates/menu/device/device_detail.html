@@ -113,6 +113,129 @@
             </div>
         </div>
 
+        {% if computer.is_online %}
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card bg-dark-transparent border-light-3 text-white">
+                    <div class="card-body py-3 px-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0 text-light" style="font-size:13px; letter-spacing:0.5px;">
+                                <i class="zmdi zmdi-chart mr-2" style="color:#a0a0a0;"></i> Real-vaqt holati
+                            </h6>
+                            <small class="text-muted" id="metrics-updated">Yuklanmoqda...</small>
+                        </div>
+
+                        <div class="row">
+                            <!-- CPU -->
+                            <div class="col-md-3 col-6 mb-3 mb-md-0">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.8px;">CPU</span>
+                                    <span class="text-white" style="font-size:11px;" id="m-cpu-pct">—</span>
+                                </div>
+                                <div class="progress mb-2" style="height:4px; background:rgba(255,255,255,0.08); border-radius:2px;">
+                                    <div class="progress-bar" id="m-cpu-bar" style="width:0%; background:rgba(255,255,255,0.6); border-radius:2px; transition:width 0.8s ease;"></div>
+                                </div>
+                                <p class="text-white mb-0" style="font-size:20px; font-weight:300;" id="m-cpu">—</p>
+                            </div>
+
+                            <!-- RAM -->
+                            <div class="col-md-3 col-6 mb-3 mb-md-0">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.8px;">RAM</span>
+                                    <span class="text-white" style="font-size:11px;" id="m-ram-pct">—</span>
+                                </div>
+                                <div class="progress mb-2" style="height:4px; background:rgba(255,255,255,0.08); border-radius:2px;">
+                                    <div class="progress-bar" id="m-ram-bar" style="width:0%; background:rgba(255,255,255,0.6); border-radius:2px; transition:width 0.8s ease;"></div>
+                                </div>
+                                <p class="text-white mb-0" style="font-size:20px; font-weight:300;" id="m-ram">—</p>
+                            </div>
+
+                            <!-- DISK -->
+                            <div class="col-md-4 col-12 mb-3 mb-md-0">
+                                <span class="text-muted d-block mb-2" style="font-size:11px; text-transform:uppercase; letter-spacing:0.8px;">Disk</span>
+                                <div id="m-drives">
+                                    <span class="text-muted" style="font-size:13px;">—</span>
+                                </div>
+                            </div>
+
+                            <!-- TARMOQ -->
+                            <div class="col-md-2 col-6">
+                                <span class="text-muted d-block mb-2" style="font-size:11px; text-transform:uppercase; letter-spacing:0.8px;">Tarmoq</span>
+                                <p class="text-white mb-0" style="font-size:20px; font-weight:300;" id="m-net">—</p>
+                                <small class="text-muted">Kbps</small>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        (function() {
+            // vergulni nuqtaga almashtirish (locale muammosi uchun)
+            const totalRamMb = parseFloat("{{ computer.ram_gb|default:0 }}".replace(',', '.')) * 1024;
+
+            function updateMetrics() {
+                fetch(window.location.pathname + '?metrics_only=1')
+                    .then(r => r.json())
+                    .then(m => {
+                        if (!m || Object.keys(m).length === 0) {
+                            document.getElementById('metrics-updated').textContent = 'Agent ma\'lumot yuborishini kutmoqda...';
+                            return;
+                        }
+
+                        // CPU
+                        const cpu = parseFloat(m.cpu) || 0;
+                        document.getElementById('m-cpu').textContent     = cpu.toFixed(1) + '%';
+                        document.getElementById('m-cpu-pct').textContent = cpu.toFixed(1) + '%';
+                        document.getElementById('m-cpu-bar').style.width = Math.min(cpu, 100) + '%';
+
+                        // RAM
+                        const ramMb  = parseFloat(m.ram_used_mb) || 0;
+                        const ramPct = totalRamMb > 0 ? Math.min(ramMb / totalRamMb * 100, 100) : 0;
+                        document.getElementById('m-ram').textContent     = Math.round(ramMb) + ' MB';
+                        document.getElementById('m-ram-pct').textContent = ramPct.toFixed(1) + '%';
+                        document.getElementById('m-ram-bar').style.width = ramPct + '%';
+
+                        // Tarmoq
+                        document.getElementById('m-net').textContent = (parseFloat(m.network) || 0).toFixed(1);
+
+                        // Drive lar
+                        const drivesEl = document.getElementById('m-drives');
+                        if (m.drives && m.drives.length > 0) {
+                            drivesEl.innerHTML = m.drives.map(d => {
+                                const pct = parseFloat(d.used_percent) || 0;
+                                const barW = Math.min(pct, 100);
+                                return '<div class="mb-2">' +
+                                    '<div class="d-flex justify-content-between mb-1">' +
+                                        '<span class="text-muted" style="font-size:11px;">' + d.letter + ':</span>' +
+                                        '<span class="text-white" style="font-size:11px;">' + d.used_gb + ' / ' + d.total_gb + ' GB &nbsp;(' + pct.toFixed(0) + '%)</span>' +
+                                    '</div>' +
+                                    '<div class="progress" style="height:4px; background:rgba(255,255,255,0.08); border-radius:2px;">' +
+                                        '<div class="progress-bar" style="width:' + barW + '%; background:rgba(255,255,255,0.6); border-radius:2px; transition:width 0.8s ease;"></div>' +
+                                    '</div>' +
+                                '</div>';
+                            }).join('');
+                        }
+
+                        const now = new Date();
+                        document.getElementById('metrics-updated').textContent =
+                            now.getHours().toString().padStart(2,'0') + ':' +
+                            now.getMinutes().toString().padStart(2,'0') + ':' +
+                            now.getSeconds().toString().padStart(2,'0') + ' yangilandi';
+                    })
+                    .catch(() => {
+                        document.getElementById('metrics-updated').textContent = 'Ulanish xatosi';
+                    });
+            }
+
+            updateMetrics();
+            setInterval(updateMetrics, 15000);
+        })();
+        </script>
+        {% endif %}
+
         <ul class="nav nav-tabs nav-tabs-glass mb-4">
             <li class="nav-item"><a class="nav-link {% if current_tab == 'usage' %}active{% endif %}" href="?tab=usage&time={{ time_filter }}"><i class="zmdi zmdi-chart mr-1"></i> Ilovalar statistikasi</a></li>
             <li class="nav-item"><a class="nav-link {% if current_tab == 'activity' %}active{% endif %}" href="?tab=activity&time={{ time_filter }}"><i class="zmdi zmdi-eye mr-1"></i> Faollik tarixi</a></li>
