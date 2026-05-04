@@ -18,7 +18,7 @@ services:
 
   web:
     build: .
-    command: gunicorn config.asgi:application -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
+    command: gunicorn config.asgi:application -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
     volumes:
       - .:/app
     ports:
@@ -28,6 +28,8 @@ services:
       - db 
     env_file:
       - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
 
 volumes:
   postgres_data:
