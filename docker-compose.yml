@@ -18,7 +18,7 @@ services:
 
   web:
     build: .
-    command: gunicorn config.asgi:application -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
+    command: gunicorn --env DJANGO_SETTINGS_MODULE=config.settings config.asgi:application -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --preload
     volumes:
       - .:/app
     ports:
