@@ -23,7 +23,7 @@ services:
     build: .
     container_name: nigoh_web
     restart: always
-    command: gunicorn config.wsgi:application -w 2 -b 0.0.0.0:8000
+    command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
     volumes:
       - .:/app
     ports:
