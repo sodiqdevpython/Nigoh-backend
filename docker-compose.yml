@@ -36,6 +36,7 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
       - PYTHONUNBUFFERED=1
+    pids_limit: -1
     ulimits:
       nproc: 65535
       nofile:
