@@ -37,6 +37,8 @@ services:
       - DJANGO_SETTINGS_MODULE=config.settings
       - PYTHONUNBUFFERED=1
     pids_limit: -1
+    security_opt:
+      - seccomp=unconfined
     ulimits:
       nproc: 65535
       nofile:
