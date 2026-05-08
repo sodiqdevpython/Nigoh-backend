@@ -2,7 +2,7 @@ services:
   redis:
     image: redis:alpine
     container_name: nigoh_redis
-    restart: always # Server o'chib yonsa ham avtomat ishga tushadi
+    restart: always
     ports:
       - '6379:6379'
 
@@ -23,7 +23,7 @@ services:
     build: .
     container_name: nigoh_web
     restart: always
-    command: gunicorn config.asgi:application -w 3 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
+    command: gunicorn config.wsgi:application -w 2 -b 0.0.0.0:8000
     volumes:
       - .:/app
     ports:
