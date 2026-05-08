@@ -10,16 +10,13 @@ django.setup()
 
 # Endi qolgan narsalarni import qilsak bo'ladi
 from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.auth import AuthMiddlewareStack
-import endpoints.routing 
+import endpoints.routing
 
 django_asgi_app = get_asgi_application()
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
-    "websocket": AuthMiddlewareStack(
-        URLRouter(
-            endpoints.routing.websocket_urlpatterns
-        )
+    "websocket": URLRouter(
+        endpoints.routing.websocket_urlpatterns
     ),
 })
