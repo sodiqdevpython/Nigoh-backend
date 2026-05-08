@@ -1,13 +1,33 @@
 import json
-from django.utils import timezone
+import os
+import asyncpg
 from channels.generic.websocket import AsyncWebsocketConsumer
-from channels.db import database_sync_to_async
-from .models import Computer
 
 # DB ga saqlanmaydi — faqat xotirada yashaydi
 LIVE_METRICS = {}
 
+# asyncpg connection pool (bir marta yaratiladi, thread kerak emas)
+_pool = None
+
+
+async def get_pool():
+    """Lazy-init asyncpg pool — pure async, zero threads."""
+    global _pool
+    if _pool is None:
+        _pool = await asyncpg.create_pool(
+            host=os.environ.get('DB_HOST', 'db'),
+            port=int(os.environ.get('DB_PORT', 5432)),
+            database=os.environ.get('DB_NAME'),
+            user=os.environ.get('DB_USER'),
+            password=os.environ.get('DB_PASSWORD'),
+            min_size=2,
+            max_size=10,
+        )
+    return _pool
+
+
 class ComputerConsumer(AsyncWebsocketConsumer):
+
     async def connect(self):
         self.bios_uuid = self.scope['url_route']['kwargs']['bios_uuid']
 
@@ -49,7 +69,6 @@ class ComputerConsumer(AsyncWebsocketConsumer):
                 'drives':      payload.get('drives', []),
                 'network':     payload.get('network', 0),
             }
-            # last_seen ni bitta query bilan yangilaymiz — thread tejash uchun
             await self.touch_last_seen()
             print(f"[{self.bios_uuid}] metrikalar: {LIVE_METRICS[self.bios_uuid]}")
 
@@ -62,26 +81,38 @@ class ComputerConsumer(AsyncWebsocketConsumer):
             'payload': data.get('payload', {}),
         }))
 
-    # --- DB FUNKSIYALAR (bitta query, minimum thread) ---
+    # --- Pure async DB (asyncpg) — thread SHART EMAS ---
 
-    @database_sync_to_async
-    def get_computer_group_id(self):
+    async def get_computer_group_id(self):
         try:
-            return Computer.objects.values_list('group_id', flat=True).get(bios_uuid=self.bios_uuid)
-        except Computer.DoesNotExist:
+            pool = await get_pool()
+            row = await pool.fetchrow(
+                'SELECT group_id FROM endpoints_computer WHERE bios_uuid = $1',
+                str(self.bios_uuid)
+            )
+            return row['group_id'] if row else None
+        except Exception as e:
+            print(f"[get_group_id xato] {e}")
             return None
 
-    @database_sync_to_async
-    def set_online_status(self, is_online):
-        # Bitta UPDATE query — GET+SAVE yo'q
-        Computer.objects.filter(bios_uuid=self.bios_uuid).update(
-            is_online=is_online,
-            last_seen=timezone.now(),
-        )
+    async def set_online_status(self, is_online):
+        try:
+            pool = await get_pool()
+            await pool.execute(
+                '''UPDATE endpoints_computer
+                      SET is_online = $1, last_seen = NOW()
+                    WHERE bios_uuid = $2''',
+                is_online, str(self.bios_uuid)
+            )
+        except Exception as e:
+            print(f"[set_online xato] {e}")
 
-    @database_sync_to_async
-    def touch_last_seen(self):
-        # Bitta UPDATE query — har 15s da chaqiriladi
-        Computer.objects.filter(bios_uuid=self.bios_uuid).update(
-            last_seen=timezone.now(),
-        )
+    async def touch_last_seen(self):
+        try:
+            pool = await get_pool()
+            await pool.execute(
+                'UPDATE endpoints_computer SET last_seen = NOW() WHERE bios_uuid = $1',
+                str(self.bios_uuid)
+            )
+        except Exception as e:
+            print(f"[touch_last_seen xato] {e}")
