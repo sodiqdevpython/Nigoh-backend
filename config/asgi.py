@@ -1,14 +1,10 @@
 import os
-import django # <--- Qo'shildi
-from django.core.asgi import get_asgi_application
+import django
 
-# Sozlamalarni o'rnatamiz
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+django.setup()
 
-# Djangoni to'liq ishga tushiramiz (Importlardan oldin bo'lishi shart!)
-django.setup() 
-
-# Endi qolgan narsalarni import qilsak bo'ladi
+from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 import endpoints.routing
 

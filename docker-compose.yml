@@ -30,12 +30,17 @@ services:
       - "8000:8000"
     depends_on:
       - redis
-      - db 
+      - db
     env_file:
       - .env
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
       - PYTHONUNBUFFERED=1
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
 
 volumes:
   postgres_data:
