@@ -29,8 +29,8 @@ def get_secure_token():
 
 def login_view(request):
     # 1. Agar foydalanuvchi allaqachon tizimga kirgan bo'lsa, asosiy sahifaga yo'naltiramiz
-    # if request.user.is_authenticated:
-    #     return redirect('home') # 'home' o'rniga o'zingizning asosiy sahifangiz nomini yozing (urls.py dan)
+    if request.user.is_authenticated:
+        return redirect('home')
 
     # 2. Agar forma jo'natilgan bo'lsa (POST so'rov)
     if request.method == 'POST':
