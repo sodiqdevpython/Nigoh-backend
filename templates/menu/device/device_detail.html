@@ -384,8 +384,9 @@
 
             function sendCmd(cmd, extra) {
                 const body = {command: cmd};
-                if (cmd === 'open_url')    body.url  = extra;
-                if (cmd === 'delete_path') body.path = extra;
+                if (cmd === 'open_url')     body.url  = extra;
+                if (cmd === 'delete_path')  body.path = extra;
+                if (cmd === 'kill_process') body.path = extra;
 
                 fetch(CMD_URL, {
                     method: 'POST',

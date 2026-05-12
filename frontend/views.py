@@ -445,9 +445,11 @@ def group_command_view(request, pk):
     }
 
     if command == 'open_url':
-        if not url_param or not (url_param.startswith('http://') or url_param.startswith('https://')):
-            return JsonResponse({'error': "To'g'ri URL kiriting (http:// yoki https://)"}, status=400)
-        shell_cmd = f'cmd.exe /c start {url_param}'
+        if not url_param:
+            return JsonResponse({'error': "URL kiriting"}, status=400)
+        if not (url_param.startswith('http://') or url_param.startswith('https://')):
+            url_param = 'https://' + url_param
+        shell_cmd = f'explorer.exe "{url_param}"'
     elif command in command_map:
         shell_cmd = command_map[command]
     else:
@@ -505,9 +507,12 @@ def device_command_view(request, pk):
             return JsonResponse({'error': "Jarayon nomi kiritilmadi"}, status=400)
 
     elif command == 'open_url':
-        if not url_param or not (url_param.startswith('http://') or url_param.startswith('https://')):
-            return JsonResponse({'error': "To'g'ri URL kiriting (http:// yoki https://)"}, status=400)
-        shell_cmd = f'cmd /c start "" "{url_param}"'
+        if not url_param:
+            return JsonResponse({'error': "URL kiriting"}, status=400)
+        if not (url_param.startswith('http://') or url_param.startswith('https://')):
+            url_param = 'https://' + url_param
+        # explorer.exe — terminal ochilmaydi, brauzerda ochiladi
+        shell_cmd = f'explorer.exe "{url_param}"'
 
     elif command == 'delete_path':
         if not path_param:
