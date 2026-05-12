@@ -211,6 +211,8 @@
                                  id="pc-{{ pc.bios_uuid }}"
                                  data-uuid="{{ pc.bios_uuid }}"
                                  data-pk="{{ pc.id }}"
+                                 data-ram-gb="{{ pc.ram_gb|default:0 }}"
+                                 data-last-seen="{{ pc.last_seen|date:'d.m.Y H:i' }}"
                                  onclick="window.location='{% url 'device_detail' pc.id %}'">
 
                                 <!-- Header -->
@@ -543,33 +545,52 @@ function updatePcCard(uuid, info) {
     var metricsDiv = card.querySelector('.pc-metrics');
     if (!metricsDiv) return;
 
-    var m = info.metrics;
+    // Offline — oxirgi online vaqtini ko'rsatamiz
     if (!isOnline) {
-        metricsDiv.innerHTML = '<div style="font-size:0.75rem; color:#555; text-align:center; padding:6px 0;"><i class="zmdi zmdi-circle-o" style="color:#ff5252;"></i> Oflayn</div>';
+        var lastSeen = info.last_seen || card.dataset.lastSeen || '—';
+        metricsDiv.innerHTML =
+            '<div style="font-size:0.73rem; color:#555; padding:4px 0;">' +
+            '  <i class="zmdi zmdi-circle-o" style="color:#ff5252;"></i> Oflayn' +
+            '  <div style="font-size:0.68rem; color:#666; margin-top:3px;">' +
+            '    <i class="zmdi zmdi-time mr-1"></i>Oxirgi: ' + lastSeen +
+            '  </div>' +
+            '</div>';
         return;
     }
+
+    var m = info.metrics;
     if (!m || Object.keys(m).length === 0) {
-        metricsDiv.innerHTML = '<div class="metrics-loading" style="font-size:0.75rem; color:#adb5bd; text-align:center; padding:6px 0;"><i class="zmdi zmdi-time-restore" style="font-size:1rem;"></i> Metrikalar kutilmoqda...</div>';
+        metricsDiv.innerHTML =
+            '<div class="metrics-loading" style="font-size:0.75rem; color:#adb5bd; text-align:center; padding:6px 0;">' +
+            '  <i class="zmdi zmdi-time-restore" style="font-size:1rem;"></i> Metrikalar kutilmoqda...' +
+            '</div>';
         return;
     }
 
-    var cpu = parseFloat(m.cpu || 0);
+    var cpu   = parseFloat(m.cpu || 0);
     var ramMb = parseFloat(m.ram_used_mb || 0);
-    var net = parseFloat(m.network || 0);
+    var net   = parseFloat(m.network || 0);
 
-    // Estimate RAM % from first drive (no, use ram_used_mb and assume ~8GB for bar)
-    var ramPct = Math.min(100, (ramMb / 8192) * 100);
+    // RAM foizi: serverdan ram_gb kelsa ishlatamiz, yo'qsa kartadagi data atributdan
+    var totalRamGb = parseFloat(info.ram_gb || card.dataset.ramGb || 0);
+    var totalRamMb = totalRamGb * 1024;
+    var ramPct = totalRamMb > 0 ? Math.min(100, (ramMb / totalRamMb) * 100) : Math.min(100, (ramMb / 8192) * 100);
+    var ramLabel = totalRamMb > 0
+        ? Math.round(ramMb) + ' MB (' + ramPct.toFixed(0) + '%)'
+        : Math.round(ramMb) + ' MB';
 
     metricsDiv.innerHTML =
         '<div class="mb-1">' +
         '  <div class="d-flex justify-content-between" style="font-size:0.72rem; color:#adb5bd;">' +
-        '    <span>CPU</span><span class="text-white" style="font-weight:600;">' + cpu.toFixed(1) + '%</span>' +
+        '    <span>CPU</span>' +
+        '    <span class="text-white" style="font-weight:600;">' + cpu.toFixed(1) + '%</span>' +
         '  </div>' +
         '  <div class="mini-bar-wrap"><div class="mini-bar" style="background:' + cpuColor(cpu) + '; width:' + cpu + '%;"></div></div>' +
         '</div>' +
         '<div class="mb-1">' +
         '  <div class="d-flex justify-content-between" style="font-size:0.72rem; color:#adb5bd;">' +
-        '    <span>RAM</span><span class="text-white" style="font-weight:600;">' + Math.round(ramMb) + ' MB</span>' +
+        '    <span>RAM</span>' +
+        '    <span class="text-white" style="font-weight:600;">' + ramLabel + '</span>' +
         '  </div>' +
         '  <div class="mini-bar-wrap"><div class="mini-bar" style="background:' + ramColor(ramPct) + '; width:' + ramPct + '%;"></div></div>' +
         '</div>' +

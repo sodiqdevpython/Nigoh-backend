@@ -396,15 +396,28 @@ def group_detail_view(request, pk):
 
 def group_metrics_view(request, pk):
     group = get_object_or_404(Group, id=pk)
-    computers = Computer.objects.filter(group=group).values('bios_uuid', 'hostname', 'is_online', 'id')
+    computers = Computer.objects.filter(group=group).values(
+        'bios_uuid', 'hostname', 'is_online', 'id', 'ram_gb', 'last_seen'
+    )
 
     result = {}
     for pc in computers:
+        last_seen = pc['last_seen']
+        if last_seen:
+            # Toshkent vaqtiga o'tkazamiz va formatlayamiz
+            from django.utils import timezone as tz
+            local_time = last_seen.astimezone(tz.get_current_timezone())
+            last_seen_str = local_time.strftime('%d.%m.%Y %H:%M')
+        else:
+            last_seen_str = '—'
+
         result[pc['bios_uuid']] = {
-            'hostname': pc['hostname'],
+            'hostname':  pc['hostname'],
             'is_online': pc['is_online'],
-            'pk': pc['id'],
-            'metrics': LIVE_METRICS.get(pc['bios_uuid']) or {},
+            'pk':        pc['id'],
+            'ram_gb':    float(pc['ram_gb'] or 0),
+            'last_seen': last_seen_str,
+            'metrics':   LIVE_METRICS.get(pc['bios_uuid']) or {},
         }
     online_total = sum(1 for v in result.values() if v['is_online'])
     return JsonResponse({'pcs': result, 'online_count': online_total, 'total_count': len(result)})
@@ -484,10 +497,14 @@ def device_command_view(request, pk):
         'lock':     'rundll32.exe user32.dll,LockWorkStation',
         'restart':  'shutdown /r /t 10',
         'shutdown': 'shutdown /s /t 10',
-        'sleep':    'rundll32.exe powrprof.dll,SetSuspendState 0,1,0',
     }
 
-    if command == 'open_url':
+    if command == 'kill_process':
+        shell_cmd = data.get('path', '').strip()  # JS tayyorlab yuboradi
+        if not shell_cmd or 'taskkill' not in shell_cmd:
+            return JsonResponse({'error': "Jarayon nomi kiritilmadi"}, status=400)
+
+    elif command == 'open_url':
         if not url_param or not (url_param.startswith('http://') or url_param.startswith('https://')):
             return JsonResponse({'error': "To'g'ri URL kiriting (http:// yoki https://)"}, status=400)
         shell_cmd = f'cmd /c start "" "{url_param}"'
