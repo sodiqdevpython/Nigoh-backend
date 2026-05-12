@@ -10,6 +10,7 @@ urlpatterns = [
 
     path('devices/', v.device_list_view, name='device_list'),
     path('device/<str:pk>/', v.device_detail_view, name='device_detail'),
+    path('device/<str:pk>/command/', v.device_command_view, name='device_command'),
     path('remote-control/request/<str:bios_uuid>/', v.create_remote_session_view, name='remote_control_request'),
     
     path('remote-control/status/<str:session_id>/', v.check_session_status_view, name='remote_control_status'),

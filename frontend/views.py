@@ -462,6 +462,60 @@ def group_command_view(request, pk):
     return JsonResponse({'status': 'ok', 'sent': sent})
 
 
+def device_command_view(request, pk):
+    """Bitta qurilmaga buyruq yuborish"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    computer = get_object_or_404(Computer, id=pk)
+    if not computer.is_online:
+        return JsonResponse({'error': 'Qurilma oflayn', 'sent': 0})
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    command   = data.get('command', '').strip()
+    url_param = data.get('url', '').strip()
+    path_param = data.get('path', '').strip()
+
+    command_map = {
+        'lock':     'rundll32.exe user32.dll,LockWorkStation',
+        'restart':  'shutdown /r /t 10',
+        'shutdown': 'shutdown /s /t 10',
+        'sleep':    'rundll32.exe powrprof.dll,SetSuspendState 0,1,0',
+    }
+
+    if command == 'open_url':
+        if not url_param or not (url_param.startswith('http://') or url_param.startswith('https://')):
+            return JsonResponse({'error': "To'g'ri URL kiriting (http:// yoki https://)"}, status=400)
+        shell_cmd = f'cmd /c start "" "{url_param}"'
+
+    elif command == 'delete_path':
+        if not path_param:
+            return JsonResponse({'error': "Yo'l kiritilmadi"}, status=400)
+        # Tizim papkalaridan himoya
+        forbidden = ['C:\\Windows', 'C:\\Program Files', 'C:\\Users\\All Users', 'C:\\ProgramData\\Nigoh']
+        if any(path_param.lower().startswith(f.lower()) for f in forbidden):
+            return JsonResponse({'error': "Bu yo'lni o'chirish taqiqlangan"}, status=403)
+        # Papkani o'chirish: rd, faylni o'chirish: del
+        shell_cmd = f'cmd /c (rd /s /q "{path_param}" 2>nul || del /f /q "{path_param}" 2>nul)'
+
+    elif command in command_map:
+        shell_cmd = command_map[command]
+
+    else:
+        return JsonResponse({'error': "Noto'g'ri buyruq"}, status=400)
+
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        f'pc_{computer.bios_uuid}',
+        {'type': 'execute_command', 'data': {'type': 'do_command', 'action': shell_cmd, 'message': '', 'payload': {}}}
+    )
+    return JsonResponse({'status': 'ok', 'command': command})
+
+
 def blocked_urls_view(request):
     if request.method == 'POST':
         action = request.POST.get('action')
