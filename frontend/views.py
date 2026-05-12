@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate, login as auth_login
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.core.paginator import Paginator
-from django.db.models import Q, Sum, Prefetch
+from django.db.models import Q, Sum, Count, Prefetch
 from endpoints.models import Group, Computer # BuildingNumber modelingizni import qiling
 from tracking.models import RemoteControlSession
 from endpoints.choices import BuildingNumber, Floor
@@ -531,6 +531,61 @@ def device_command_view(request, pk):
         {'type': 'execute_command', 'data': {'type': 'do_command', 'action': shell_cmd, 'message': '', 'payload': {}}}
     )
     return JsonResponse({'status': 'ok', 'command': command})
+
+
+def group_stats_view(request, pk):
+    group = get_object_or_404(Group, id=pk)
+    time_filter = request.GET.get('time', 'today')
+
+    now = timezone.now()
+    if time_filter == 'week':
+        start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        label = 'Shu hafta'
+    else:
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        label = 'Bugun'
+
+    computers = Computer.objects.filter(group=group)
+
+    # Top web sahifalar — eng ko'p tashrif (count)
+    top_pages_count = (
+        ActivityLog.objects
+        .filter(computer__in=computers, created_at__gte=start, url__isnull=False)
+        .exclude(url='')
+        .values('url', 'title')
+        .annotate(visits=Count('id'), total_sec=Sum('duration_seconds'))
+        .order_by('-visits')[:10]
+    )
+
+    # Top web sahifalar — eng ko'p vaqt (duration)
+    top_pages_time = (
+        ActivityLog.objects
+        .filter(computer__in=computers, created_at__gte=start, url__isnull=False)
+        .exclude(url='')
+        .values('url', 'title')
+        .annotate(total_sec=Sum('duration_seconds'), visits=Count('id'))
+        .order_by('-total_sec')[:10]
+    )
+
+    # Top dasturlar — eng ko'p vaqt
+    top_apps = (
+        AppUsageStatistic.objects
+        .filter(computer__in=computers, created_at__gte=start)
+        .values('app_name')
+        .annotate(total_sec=Sum('active_seconds'))
+        .order_by('-total_sec')[:10]
+    )
+
+    context = {
+        'group': group,
+        'time_filter': time_filter,
+        'label': label,
+        'top_pages_count': top_pages_count,
+        'top_pages_time': top_pages_time,
+        'top_apps': top_apps,
+        'total_computers': computers.count(),
+    }
+    return render(request, 'menu/groups/group_stats.html', context)
 
 
 def blocked_urls_view(request):

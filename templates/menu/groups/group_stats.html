@@ -1,0 +1,247 @@
+{% extends "base/base.html" %}
+{% block content %}
+<style>
+    .bg-dark-transparent { background-color:rgba(0,0,0,0.45)!important; backdrop-filter:blur(12px); box-shadow:0 4px 15px rgba(0,0,0,0.2); }
+    .bg-glass            { background-color:rgba(0,0,0,0.25)!important; backdrop-filter:blur(8px); }
+    .border-light-3      { border:1px solid rgba(255,255,255,0.15)!important; }
+    .text-white          { color:#fff!important; text-shadow:0 1px 3px rgba(0,0,0,0.8); }
+    .text-muted          { color:#adb5bd!important; }
+    .stat-bar-bg         { background:rgba(255,255,255,0.07); border-radius:4px; height:8px; overflow:hidden; }
+    .stat-bar            { height:8px; border-radius:4px; transition:width 0.6s ease; }
+    .rank-num            { width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:700; flex-shrink:0; }
+    .section-card        { background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:12px; }
+    .filter-btn          { border-radius:20px; font-size:0.8rem; padding:4px 16px; border:1px solid rgba(255,255,255,0.2); color:#adb5bd; background:transparent; transition:all 0.2s; }
+    .filter-btn.active   { background:rgba(255,255,255,0.15); color:#fff; border-color:rgba(255,255,255,0.4); }
+    .filter-btn:hover    { color:#fff; background:rgba(255,255,255,0.08); }
+    .url-text            { max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:middle; }
+</style>
+
+<div class="content-wrapper">
+<div class="container-fluid">
+
+    <!-- HEADER -->
+    <div class="row mt-3 mb-3">
+        <div class="col-12">
+            <div class="card bg-dark-transparent border-light-3">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap:10px;">
+                        <div class="d-flex align-items-center">
+                            <a href="{% url 'group_detail' group.id %}" class="btn btn-sm btn-secondary mr-3" style="border-radius:8px;">
+                                <i class="zmdi zmdi-arrow-left"></i>
+                            </a>
+                            <div>
+                                <h4 class="mb-0 text-white">
+                                    <i class="zmdi zmdi-chart mr-2" style="color:#adb5bd;"></i>{{ group.name }} — Statistika
+                                </h4>
+                                <small class="text-muted">
+                                    <i class="zmdi zmdi-pin mr-1"></i>{{ group.get_building_display }}
+                                    &nbsp;·&nbsp; {{ group.get_floor_display }}
+                                    &nbsp;·&nbsp; Xona: <strong class="text-light">{{ group.room_number }}</strong>
+                                    &nbsp;·&nbsp; {{ total_computers }} ta PC
+                                </small>
+                            </div>
+                        </div>
+                        <!-- Filtr -->
+                        <div class="d-flex" style="gap:8px;">
+                            <a href="?time=today" class="filter-btn {% if time_filter == 'today' %}active{% endif %}">
+                                <i class="zmdi zmdi-calendar-note mr-1"></i> Bugun
+                            </a>
+                            <a href="?time=week" class="filter-btn {% if time_filter == 'week' %}active{% endif %}">
+                                <i class="zmdi zmdi-calendar mr-1"></i> Shu hafta
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+
+        <!-- ===== TOP TASHRIF: WEB SAHIFALAR ===== -->
+        <div class="col-lg-6 mb-4">
+            <div class="section-card p-4 h-100">
+                <div class="d-flex align-items-center mb-3">
+                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(33,150,243,0.2);display:flex;align-items:center;justify-content:center;margin-right:12px;">
+                        <i class="zmdi zmdi-globe" style="color:#2196F3;font-size:1.1rem;"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-0 text-white">Eng ko'p tashrif buyurilgan sahifalar</h6>
+                        <small class="text-muted">{{ label }} — tashrif soni bo'yicha</small>
+                    </div>
+                </div>
+
+                {% if top_pages_count %}
+                {% with max_v=top_pages_count.0.visits %}
+                <div class="d-flex flex-column" style="gap:10px;">
+                {% for item in top_pages_count %}
+                    {% with pct=item.visits|floatformat:0 %}
+                    <div>
+                        <div class="d-flex align-items-center mb-1" style="gap:8px;">
+                            <span class="rank-num" style="background:rgba(33,150,243,0.{% if forloop.counter == 1 %}4{% elif forloop.counter == 2 %}3{% elif forloop.counter == 3 %}25{% else %}15{% endif %});color:#{% if forloop.counter == 1 %}64B5F6{% elif forloop.counter == 2 %}90CAF9{% else %}adb5bd{% endif %};">
+                                {{ forloop.counter }}
+                            </span>
+                            <div style="flex:1;min-width:0;">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="text-white" style="font-size:0.82rem;">
+                                        {% if item.url %}
+                                        {% with u=item.url %}
+                                        <a href="{% if u|slice:':4' == 'http' %}{{ u }}{% else %}https://{{ u }}{% endif %}"
+                                           target="_blank" class="text-info url-text" title="{{ item.url }}"
+                                           style="font-size:0.82rem;text-decoration:none;"
+                                           onclick="event.stopPropagation();">{{ item.url|truncatechars:50 }}</a>
+                                        {% endwith %}
+                                        {% else %}—{% endif %}
+                                    </span>
+                                    <span class="text-white" style="font-size:0.8rem;font-weight:600;margin-left:8px;white-space:nowrap;">
+                                        {{ item.visits }} marta
+                                    </span>
+                                </div>
+                                {% if max_v %}
+                                <div class="stat-bar-bg">
+                                    <div class="stat-bar" style="background:rgba(33,150,243,0.7);width:{% widthratio item.visits max_v 100 %}%;"></div>
+                                </div>
+                                {% endif %}
+                                {% if item.title %}
+                                <div class="text-muted mt-1" style="font-size:0.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ item.title|truncatechars:60 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endwith %}
+                {% endfor %}
+                </div>
+                {% endwith %}
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="zmdi zmdi-globe" style="font-size:2.5rem;opacity:0.3;"></i>
+                    <p class="mt-2 mb-0">{{ label }} uchun ma'lumot yo'q</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ===== TOP VAQT: WEB SAHIFALAR ===== -->
+        <div class="col-lg-6 mb-4">
+            <div class="section-card p-4 h-100">
+                <div class="d-flex align-items-center mb-3">
+                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(156,39,176,0.2);display:flex;align-items:center;justify-content:center;margin-right:12px;">
+                        <i class="zmdi zmdi-time" style="color:#CE93D8;font-size:1.1rem;"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-0 text-white">Eng ko'p vaqt sarflangan sahifalar</h6>
+                        <small class="text-muted">{{ label }} — vaqt bo'yicha</small>
+                    </div>
+                </div>
+
+                {% if top_pages_time %}
+                {% with max_v=top_pages_time.0.total_sec %}
+                <div class="d-flex flex-column" style="gap:10px;">
+                {% for item in top_pages_time %}
+                    <div>
+                        <div class="d-flex align-items-center mb-1" style="gap:8px;">
+                            <span class="rank-num" style="background:rgba(156,39,176,0.{% if forloop.counter == 1 %}4{% elif forloop.counter == 2 %}3{% elif forloop.counter == 3 %}25{% else %}15{% endif %});color:#{% if forloop.counter == 1 %}CE93D8{% elif forloop.counter == 2 %}BA68C8{% else %}adb5bd{% endif %};">
+                                {{ forloop.counter }}
+                            </span>
+                            <div style="flex:1;min-width:0;">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="text-white" style="font-size:0.82rem;">
+                                        {% if item.url %}
+                                        {% with u=item.url %}
+                                        <a href="{% if u|slice:':4' == 'http' %}{{ u }}{% else %}https://{{ u }}{% endif %}"
+                                           target="_blank" class="text-info url-text" title="{{ item.url }}"
+                                           style="font-size:0.82rem;text-decoration:none;"
+                                           onclick="event.stopPropagation();">{{ item.url|truncatechars:50 }}</a>
+                                        {% endwith %}
+                                        {% else %}—{% endif %}
+                                    </span>
+                                    <span class="text-white" style="font-size:0.8rem;font-weight:600;margin-left:8px;white-space:nowrap;">
+                                        {% if item.total_sec >= 3600 %}
+                                            {{ item.total_sec|floatformat:0 }}s &nbsp;<span class="text-muted" style="font-size:0.7rem;">(≈{{ item.total_sec|divisibleby:3600 }}s)</span>
+                                        {% else %}
+                                            {{ item.total_sec }} s
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                {% if max_v %}
+                                <div class="stat-bar-bg">
+                                    <div class="stat-bar" style="background:rgba(156,39,176,0.7);width:{% widthratio item.total_sec max_v 100 %}%;"></div>
+                                </div>
+                                {% endif %}
+                                {% if item.title %}
+                                <div class="text-muted mt-1" style="font-size:0.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ item.title|truncatechars:60 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+                </div>
+                {% endwith %}
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="zmdi zmdi-time" style="font-size:2.5rem;opacity:0.3;"></i>
+                    <p class="mt-2 mb-0">{{ label }} uchun ma'lumot yo'q</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ===== TOP DASTURLAR ===== -->
+        <div class="col-12 mb-4">
+            <div class="section-card p-4">
+                <div class="d-flex align-items-center mb-3">
+                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(76,175,80,0.2);display:flex;align-items:center;justify-content:center;margin-right:12px;">
+                        <i class="zmdi zmdi-apps" style="color:#81C784;font-size:1.1rem;"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-0 text-white">Eng ko'p ishlatiladigan dasturlar</h6>
+                        <small class="text-muted">{{ label }} — faol vaqt bo'yicha</small>
+                    </div>
+                </div>
+
+                {% if top_apps %}
+                {% with max_v=top_apps.0.total_sec %}
+                <div class="row">
+                {% for item in top_apps %}
+                    <div class="col-md-6 mb-3">
+                        <div class="d-flex align-items-center" style="gap:10px;">
+                            <span class="rank-num" style="background:rgba(76,175,80,0.{% if forloop.counter <= 3 %}35{% else %}15{% endif %});color:#{% if forloop.counter == 1 %}81C784{% elif forloop.counter == 2 %}A5D6A7{% else %}adb5bd{% endif %};">
+                                {{ forloop.counter }}
+                            </span>
+                            <div style="flex:1;">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="text-white" style="font-size:0.85rem;font-weight:500;">{{ item.app_name|truncatechars:35 }}</span>
+                                    <span style="font-size:0.78rem;color:#81C784;font-weight:600;margin-left:8px;white-space:nowrap;">
+                                        {% if item.total_sec >= 3600 %}
+                                            {% widthratio item.total_sec 3600 1 %} soat
+                                        {% elif item.total_sec >= 60 %}
+                                            {% widthratio item.total_sec 60 1 %} daqiqa
+                                        {% else %}
+                                            {{ item.total_sec }} soniya
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                {% if max_v %}
+                                <div class="stat-bar-bg">
+                                    <div class="stat-bar" style="background:rgba(76,175,80,0.65);width:{% widthratio item.total_sec max_v 100 %}%;"></div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+                </div>
+                {% endwith %}
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="zmdi zmdi-apps" style="font-size:2.5rem;opacity:0.3;"></i>
+                    <p class="mt-2 mb-0">{{ label }} uchun ma'lumot yo'q</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+</div>
+</div>
+{% endblock content %}

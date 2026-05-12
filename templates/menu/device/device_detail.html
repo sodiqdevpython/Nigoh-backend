@@ -254,9 +254,10 @@
                                         style="background:rgba(255,193,7,0.15);border:1px solid rgba(255,193,7,0.4);color:#ffc107;">
                                         <i class="zmdi zmdi-lock mr-1"></i> Ekranni qulflash
                                     </button>
-                                    <button class="btn btn-sm cmd-btn" data-cmd="sleep"
-                                        style="background:rgba(23,162,184,0.15);border:1px solid rgba(23,162,184,0.4);color:#17a2b8;">
-                                        <i class="zmdi zmdi-power-sleep mr-1"></i> Uxlatish
+                                    <button class="btn btn-sm" id="btnKillProcess"
+                                        style="background:rgba(23,162,184,0.15);border:1px solid rgba(23,162,184,0.4);color:#17a2b8;"
+                                        data-toggle="modal" data-target="#killProcessModal">
+                                        <i class="zmdi zmdi-close-circle mr-1"></i> Jarayonni to'xtatish
                                     </button>
                                     <button class="btn btn-sm cmd-btn" data-cmd="restart"
                                         style="background:rgba(255,152,0,0.15);border:1px solid rgba(255,152,0,0.4);color:#ff9800;">
@@ -313,6 +314,34 @@
 
                         <!-- Natija xabari -->
                         <div id="cmdResult" class="mt-3" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kill Process modal -->
+        <div class="modal fade" id="killProcessModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="background:rgba(20,20,30,0.97);border:1px solid rgba(255,255,255,0.15);color:#fff;">
+                    <div class="modal-header border-0 pb-0">
+                        <h6 class="modal-title text-white"><i class="zmdi zmdi-close-circle mr-2" style="color:#17a2b8;"></i> Jarayonni to'xtatish</h6>
+                        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <label class="text-muted small mb-1">Jarayon nomi (.exe yoki nomsiz)</label>
+                        <input type="text" id="killProcessInput" class="form-control form-control-sm"
+                            placeholder="telegram.exe yoki chrome"
+                            style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.2);color:#fff;">
+                        <small class="text-muted mt-1 d-block" style="font-size:11px;">
+                            Bir nechta bo'lsa vergul bilan ajrating: <code style="color:#74b9ff;">chrome, telegram, notepad</code>
+                        </small>
+                    </div>
+                    <div class="modal-footer border-0 pt-0">
+                        <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Bekor qilish</button>
+                        <button type="button" class="btn btn-sm" id="confirmKill"
+                            style="background:rgba(23,162,184,0.3);border:1px solid #17a2b8;color:#17a2b8;">
+                            <i class="zmdi zmdi-close-circle mr-1"></i> To'xtatish
+                        </button>
                     </div>
                 </div>
             </div>
@@ -386,6 +415,20 @@
                         sendCmd(cmd, null);
                     }
                 });
+            });
+
+            // Kill process
+            document.getElementById('confirmKill').addEventListener('click', function(){
+                const raw = document.getElementById('killProcessInput').value.trim();
+                if (!raw) { showResult("Jarayon nomi kiriting.", false); return; }
+                // Bir nechta nom bo'lsa — har biri uchun taskkill chaqiramiz
+                const names = raw.split(',').map(s => s.trim()).filter(Boolean);
+                const cmds = names.map(n => {
+                    const exe = n.toLowerCase().endsWith('.exe') ? n : n + '.exe';
+                    return `taskkill /f /im "${exe}"`;
+                }).join(' & ');
+                $('#killProcessModal').modal('hide');
+                sendCmd('kill_process', cmds);
             });
 
             // URL ochish
@@ -598,7 +641,12 @@
                                                     <li class="mb-2"><strong class="text-muted">Dastur/Brauzer:</strong> {{ item.app_name }}</li>
                                                     <li class="mb-2"><strong class="text-muted">Sarflangan aniq vaqt:</strong> <span class="badge badge-success" style="text-shadow: none;">{{ item.duration_seconds }} sekund</span></li>
                                                     {% if item.url %}
-                                                    <li class="mb-2"><strong class="text-muted">URL Manzil:</strong> <a href="{{ item.url }}" target="_blank" class="text-info" style="word-break: break-all;">{{ item.url }}</a></li>
+                                                    {% with full_url=item.url %}
+                                                    <li class="mb-2"><strong class="text-muted">URL Manzil:</strong>
+                                                        <a href="{% if full_url|slice:':4' == 'http' %}{{ full_url }}{% else %}https://{{ full_url }}{% endif %}"
+                                                           target="_blank" class="text-info" style="word-break: break-all;">{{ item.url }}</a>
+                                                    </li>
+                                                    {% endwith %}
                                                     {% endif %}
                                                     <li class="mb-2"><strong class="text-muted">Qayd etilgan sana:</strong> {{ item.created_at|date:"d M Y, H:i:s" }}</li>
                                                 </ul>
