@@ -521,8 +521,8 @@ def device_command_view(request, pk):
         forbidden = ['C:\\Windows', 'C:\\Program Files', 'C:\\Users\\All Users', 'C:\\ProgramData\\Nigoh']
         if any(path_param.lower().startswith(f.lower()) for f in forbidden):
             return JsonResponse({'error': "Bu yo'lni o'chirish taqiqlangan"}, status=403)
-        # Papkani o'chirish: rd, faylni o'chirish: del
-        shell_cmd = f'cmd /c (rd /s /q "{path_param}" 2>nul || del /f /q "{path_param}" 2>nul)'
+        # Fayl yoki papkani o'chirish (PowerShell sintaksisi)
+        shell_cmd = f'Remove-Item -Recurse -Force "{path_param}" -ErrorAction SilentlyContinue'
 
     elif command in command_map:
         shell_cmd = command_map[command]
