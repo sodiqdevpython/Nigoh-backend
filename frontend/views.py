@@ -522,7 +522,8 @@ def device_command_view(request, pk):
         if any(path_param.lower().startswith(f.lower()) for f in forbidden):
             return JsonResponse({'error': "Bu yo'lni o'chirish taqiqlangan"}, status=403)
         # Fayl yoki papkani o'chirish (PowerShell sintaksisi)
-        shell_cmd = f'Remove-Item -Recurse -Force "{path_param}" -ErrorAction SilentlyContinue'
+        # Bitta tirnoq ishlatamiz — C# -Command "..." ichida ikki tirnoq stringni buzadi
+        shell_cmd = f"Remove-Item -Recurse -Force '{path_param}' -ErrorAction SilentlyContinue"
 
     elif command in command_map:
         shell_cmd = command_map[command]
