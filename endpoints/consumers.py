@@ -6,6 +6,10 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 # DB ga saqlanmaydi — faqat xotirada yashaydi
 LIVE_METRICS = {}
 
+# Har bir bios_uuid uchun hozirgi faol channel_name saqlanadi.
+# Stale disconnect() yangi ulanishni offline qilib qo'ymasligi uchun.
+ACTIVE_CHANNELS = {}
+
 # asyncpg connection pool (bir marta yaratiladi, thread kerak emas)
 _pool = None
 
@@ -30,6 +34,7 @@ class ComputerConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
         self.bios_uuid = self.scope['url_route']['kwargs']['bios_uuid']
+        self.group_room_name = None  # connect() o'rtasida xato bo'lsa disconnect() ishlashi uchun
 
         self.pc_room_name = f'pc_{self.bios_uuid}'
         await self.channel_layer.group_add(self.pc_room_name, self.channel_name)
@@ -38,11 +43,14 @@ class ComputerConsumer(AsyncWebsocketConsumer):
         if self.group_id:
             self.group_room_name = f'group_{self.group_id}'
             await self.channel_layer.group_add(self.group_room_name, self.channel_name)
-        else:
-            self.group_room_name = None
 
         self.all_pcs_room = 'all_pcs'
         await self.channel_layer.group_add(self.all_pcs_room, self.channel_name)
+
+        # Ushbu connection ni "faol" deb belgilaymiz.
+        # Agar avvalgi stale disconnect() keyin ishlab qolsa — u o'zini "faol emas" deb biladi
+        # va is_online=False qilmaydi.
+        ACTIVE_CHANNELS[self.bios_uuid] = self.channel_name
 
         await self.set_online_status(True)
         await self.accept()
@@ -54,9 +62,14 @@ class ComputerConsumer(AsyncWebsocketConsumer):
         if self.group_room_name:
             await self.channel_layer.group_discard(self.group_room_name, self.channel_name)
 
-        await self.set_online_status(False)
-        LIVE_METRICS.pop(self.bios_uuid, None)
-        print(f"[-] Uzildi: {self.bios_uuid}")
+        # MUHIM: faqat MEN hozirgi "faol" channel bo'lsam offline qilaman.
+        # Stale (eskirgan) disconnect() yangi ulanishni offline qilmasligi uchun.
+        if ACTIVE_CHANNELS.get(self.bios_uuid) == self.channel_name:
+            ACTIVE_CHANNELS.pop(self.bios_uuid, None)
+            await self.set_online_status(False)
+            LIVE_METRICS.pop(self.bios_uuid, None)
+
+        print(f"[-] Uzildi: {self.bios_uuid} | channel: {self.channel_name[:12]}...")
 
     async def receive(self, text_data):
         data = json.loads(text_data)

@@ -3,6 +3,10 @@ services:
     image: redis:alpine
     container_name: nigoh_redis
     restart: always
+    # --save "" — RDB snapshot o'chirildi (channels uchun persistence shart emas)
+    # --appendonly no — AOF ham o'chirildi
+    # Shu ikki flag bo'lmasa Redis ba'zida read-only rejimga tushib qoladi
+    command: redis-server --save "" --appendonly no
     ports:
       - '6379:6379'
 

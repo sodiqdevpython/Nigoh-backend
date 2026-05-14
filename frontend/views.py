@@ -700,4 +700,3 @@ def blocked_processes_view(request):
         'top_blocked': top_blocked,
         'match_choices': BlockedProcess.MATCH_CHOICES,
     })
-    
