@@ -1,0 +1,350 @@
+[
+{
+  "model": "endpoints.group",
+  "pk": "02f711b4-cc1b-44c4-ab81-84f137d856b4",
+  "fields": {
+    "created_at": "2026-06-29T08:26:08.168Z",
+    "updated_at": "2026-06-29T08:26:08.168Z",
+    "name": "TYUTORLAR XONASI",
+    "building": 2,
+    "floor": 2,
+    "room_number": "209"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "164b540a-4072-4589-9806-fd95e986f76f",
+  "fields": {
+    "created_at": "2026-06-29T08:04:03.913Z",
+    "updated_at": "2026-06-29T08:04:03.914Z",
+    "name": "-",
+    "building": 1,
+    "floor": 2,
+    "room_number": "209"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "1d7a87c9-b03e-457e-8876-093baa424925",
+  "fields": {
+    "created_at": "2026-06-29T08:09:23.115Z",
+    "updated_at": "2026-06-29T08:09:23.115Z",
+    "name": "MLIYA KAFEDRASI 2",
+    "building": 1,
+    "floor": 4,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "2e8b7155-f07c-4688-9d11-a4c8507d2fff",
+  "fields": {
+    "created_at": "2026-06-29T08:07:40.538Z",
+    "updated_at": "2026-06-29T08:07:40.538Z",
+    "name": "-",
+    "building": 1,
+    "floor": 4,
+    "room_number": "410"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "2ec4a40b-bdce-4fbd-b049-1766042761d7",
+  "fields": {
+    "created_at": "2026-06-29T08:08:22.182Z",
+    "updated_at": "2026-06-29T08:09:44.844Z",
+    "name": "MOLIYA KAFEDRASI 1",
+    "building": 1,
+    "floor": 4,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "3419dfb3-9b20-4173-bc68-3ea326e4ef54",
+  "fields": {
+    "created_at": "2026-06-29T07:56:49.204Z",
+    "updated_at": "2026-06-29T07:59:30.578Z",
+    "name": "-",
+    "building": 1,
+    "floor": 3,
+    "room_number": "311"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "3a565f58-9caf-4ac4-a772-03ed8359885c",
+  "fields": {
+    "created_at": "2026-06-29T08:20:33.647Z",
+    "updated_at": "2026-06-29T08:20:33.647Z",
+    "name": "TIBBOYOT FAKULTET DEKANI",
+    "building": 2,
+    "floor": 1,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "4fba74ca-9e6d-4a7f-9eb0-6f2f61bffe24",
+  "fields": {
+    "created_at": "2026-06-29T08:25:20.075Z",
+    "updated_at": "2026-06-29T08:25:20.075Z",
+    "name": "-",
+    "building": 2,
+    "floor": 2,
+    "room_number": "210"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "59d4b319-b8db-49fd-bb21-11599a0900e8",
+  "fields": {
+    "created_at": "2026-06-29T07:49:14.398Z",
+    "updated_at": "2026-06-29T07:49:14.398Z",
+    "name": "Kompyuter 2-xona",
+    "building": 1,
+    "floor": -1,
+    "room_number": "2"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "60a5c2a5-561c-44ef-8eab-fc337fb0c812",
+  "fields": {
+    "created_at": "2026-06-29T07:58:27.200Z",
+    "updated_at": "2026-06-29T07:58:27.200Z",
+    "name": "RAQAMLI TEXNALOGIYALAR DEKANATI",
+    "building": 1,
+    "floor": 3,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "60b1ffdd-00d5-47e3-8864-2314b9651a1f",
+  "fields": {
+    "created_at": "2026-06-29T07:54:31.568Z",
+    "updated_at": "2026-06-29T07:54:31.568Z",
+    "name": "IQTISODIYOT KAFEDRASI",
+    "building": 1,
+    "floor": 2,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "616d113f-c3b4-437d-835b-865651df1c37",
+  "fields": {
+    "created_at": "2026-06-29T08:12:26.311Z",
+    "updated_at": "2026-06-29T08:12:26.311Z",
+    "name": "IQTISODIYOT FAKULTETI KECHKI VA KUNDUZGI DEKANATI",
+    "building": 1,
+    "floor": 2,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "634eb776-02e2-4fc6-8622-45f58b907e2f",
+  "fields": {
+    "created_at": "2026-05-12T11:10:10.022Z",
+    "updated_at": "2026-05-12T11:10:10.022Z",
+    "name": "312-xona amaliyot",
+    "building": 1,
+    "floor": 3,
+    "room_number": "312"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "6c0783da-bb7b-4cba-9ed4-f6cce84ffe7a",
+  "fields": {
+    "created_at": "2026-06-29T07:53:39.550Z",
+    "updated_at": "2026-06-29T07:53:39.550Z",
+    "name": "-",
+    "building": 1,
+    "floor": 2,
+    "room_number": "215"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "6cf458ea-97bc-4577-abd0-318cd8d24156",
+  "fields": {
+    "created_at": "2026-06-29T08:46:34.815Z",
+    "updated_at": "2026-06-29T08:46:34.815Z",
+    "name": "IT",
+    "building": 1,
+    "floor": -1,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "7706e929-beee-4fd5-b981-ae2aa132d12c",
+  "fields": {
+    "created_at": "2026-06-29T08:31:55.108Z",
+    "updated_at": "2026-06-29T08:31:55.108Z",
+    "name": "ICHKI KASALLIKLAR KAFEDRASI PROFESSOR - O’QTUVCHILAR XONASI",
+    "building": 2,
+    "floor": 2,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "87555452-fc77-4331-8e10-a4f60db4506e",
+  "fields": {
+    "created_at": "2026-06-29T07:48:33.762Z",
+    "updated_at": "2026-06-29T07:48:33.762Z",
+    "name": "Kompyuter 1-xona",
+    "building": 1,
+    "floor": -1,
+    "room_number": "1"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "98f928b5-238d-475f-befc-cb1918074456",
+  "fields": {
+    "created_at": "2026-05-08T10:34:03.741Z",
+    "updated_at": "2026-06-29T08:02:56.745Z",
+    "name": "-",
+    "building": 1,
+    "floor": 3,
+    "room_number": "309"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "a7dd8726-1591-407b-ac6c-ebe8d0eaed50",
+  "fields": {
+    "created_at": "2026-06-28T16:01:07.744Z",
+    "updated_at": "2026-06-28T16:01:07.744Z",
+    "name": "Dekanat A bino",
+    "building": 1,
+    "floor": 2,
+    "room_number": "203"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "a82785de-c6f3-41b5-8502-b9d7f2be8b12",
+  "fields": {
+    "created_at": "2026-06-29T08:30:03.512Z",
+    "updated_at": "2026-06-29T08:30:03.512Z",
+    "name": "ICHKI KASALLIKLAR KAFEDRASI MUDIRI",
+    "building": 2,
+    "floor": 2,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "ad32f5b5-2a43-4c86-9926-6192d7638f69",
+  "fields": {
+    "created_at": "2026-06-29T08:05:57.325Z",
+    "updated_at": "2026-06-29T08:05:57.325Z",
+    "name": "RAQAMLIY TEXNALOGIYALAR KAFEDRASI",
+    "building": 1,
+    "floor": 3,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "aec534e9-92e8-42a4-ab5d-28f7eed8c4b3",
+  "fields": {
+    "created_at": "2026-06-29T08:33:20.889Z",
+    "updated_at": "2026-06-29T08:33:20.889Z",
+    "name": "-",
+    "building": 2,
+    "floor": 3,
+    "room_number": "303"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "b2d03cea-56ca-473b-85b7-a1bdb6d68da2",
+  "fields": {
+    "created_at": "2026-06-29T07:52:21.349Z",
+    "updated_at": "2026-06-29T07:52:21.349Z",
+    "name": "IQTISODIYOT DEKANATI",
+    "building": 1,
+    "floor": 2,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "b36cff26-dbf1-46bd-8026-38dad8f305c0",
+  "fields": {
+    "created_at": "2026-06-29T08:28:13.661Z",
+    "updated_at": "2026-06-29T08:28:13.661Z",
+    "name": "XIRURGIK KASALLIKLAR KAFEDRA MUDIRI",
+    "building": 2,
+    "floor": 2,
+    "room_number": "214"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "b49d7edf-ab6c-48ac-a6b4-bba7fea62c33",
+  "fields": {
+    "created_at": "2026-06-29T08:33:34.650Z",
+    "updated_at": "2026-06-29T08:33:34.650Z",
+    "name": "-",
+    "building": 2,
+    "floor": 3,
+    "room_number": "306"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "d8f73d63-05df-4be1-b47c-c89a831b88ed",
+  "fields": {
+    "created_at": "2026-06-29T08:06:48.779Z",
+    "updated_at": "2026-06-29T08:06:48.779Z",
+    "name": "KAFEDRA MUDIRI",
+    "building": 1,
+    "floor": 4,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "db064566-d69e-4d26-9b5f-1b059f044143",
+  "fields": {
+    "created_at": "2026-06-29T08:24:57.324Z",
+    "updated_at": "2026-06-29T08:24:57.324Z",
+    "name": "XIRURGIK KASALLIKLAR KAFEDRASI",
+    "building": 2,
+    "floor": 2,
+    "room_number": "211"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "de81a984-fdb0-415f-9e21-1000f0f0cd5b",
+  "fields": {
+    "created_at": "2026-06-29T08:14:10.215Z",
+    "updated_at": "2026-06-29T08:14:10.215Z",
+    "name": "ILMIY ISHLAR VA INNOVATSIYAL BO’YICHA REKTOR MASLAHATCHISI",
+    "building": 1,
+    "floor": 2,
+    "room_number": "-"
+  }
+},
+{
+  "model": "endpoints.group",
+  "pk": "f599db22-0c76-438c-a05a-3794e2426866",
+  "fields": {
+    "created_at": "2026-06-29T08:01:15.150Z",
+    "updated_at": "2026-06-29T08:01:34.506Z",
+    "name": "MATEMATIKA",
+    "building": 1,
+    "floor": 3,
+    "room_number": "-"
+  }
+}
+]
