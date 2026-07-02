@@ -176,7 +176,14 @@ class AppUsageStatistic(BaseModel):
     computer = models.ForeignKey('endpoints.Computer', on_delete=models.CASCADE, related_name='app_usages')
     
     app_name = models.CharField(max_length=255, db_index=True)
-    
+
+    # Exe faylning to'liq yo'li — masalan "C:\Program Files\Google\Chrome\...\chrome.exe"
+    # Agent ba'zi processlarga (SYSTEM, protected) ruxsati bo'lmasa bo'sh bo'lishi mumkin.
+    full_path = models.CharField(
+        max_length=500, blank=True, null=True,
+        help_text="Exe faylning to'liq yo'li"
+    )
+
     # Barcha vaqtlar soniyalarda (sekund) saqlanadi
     total_open_seconds = models.PositiveIntegerField(default=0, help_text="Umumiy ochiq turgan vaqt")
     active_seconds = models.PositiveIntegerField(default=0, help_text="Sof aktiv bo'lgan (fokusdagi) vaqt")
@@ -209,4 +216,100 @@ class ScreenShareSession(BaseModel):
 
     def __str__(self):
         return f"{self.computer.hostname} - {self.status}"
+
+
+# ============================================================
+# SCREENSHOT — admin qo'lda button bosganda agent bir marta rasm oladi
+# ============================================================
+
+def _screenshot_upload_path(instance, filename):
+    """Yil/oy/computer.id/uuid.jpg strukturasi (media/screenshots/2026/06/...)"""
+    from datetime import datetime
+    now = datetime.now()
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'jpg'
+    return f"screenshots/{now.year}/{now.month:02d}/{instance.computer_id}/{instance.id}.{ext}"
+
+
+class ScreenshotRequest(BaseModel):
+    """
+    Har bir 'Screenshot ol' bosishi shu yerga yoziladi.
+    Kim (admin), qachon, qaysi kompyuterda — audit trail.
+    """
+    STATUS_CHOICES = (
+        ('PENDING',  'Kutilmoqda'),
+        ('DELIVERED','Agent qabul qildi'),
+        ('COMPLETED','Rasm keldi'),
+        ('FAILED',   'Xato'),
+    )
+
+    computer = models.ForeignKey(
+        'endpoints.Computer', on_delete=models.CASCADE,
+        related_name='screenshot_requests'
+    )
+    requested_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='screenshot_requests',
+        help_text="Qaysi admin so'ragan (audit uchun)"
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+
+    # Rasm — agent yuklab qo'yadi, DB'da FileField sifatida saqlanadi
+    image = models.ImageField(
+        upload_to=_screenshot_upload_path, blank=True, null=True,
+        help_text="Agent tomonidan yuborilgan screenshot"
+    )
+    delivered_at = models.DateTimeField(null=True, blank=True, help_text="Agent qabul qilgan vaqt")
+    completed_at = models.DateTimeField(null=True, blank=True, help_text="Rasm yuklangan vaqt")
+    error_message = models.TextField(blank=True, default='')
+
+    # Ixtiyoriy izoh (kelgusi kengaytmalar uchun)
+    notes = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['computer', '-created_at']),
+        ]
+
+    def __str__(self):
+        who = self.requested_by.username if self.requested_by else 'anonymous'
+        return f"{self.computer.hostname} — {who} ({self.status})"
+
+
+# ============================================================
+# BROADCAST — 1 input → N outputs ekran ulashish
+# (input screen_share.exe ishga tushiradi, output'lar brauzerdan URL'ga o'tadi)
+# ============================================================
+
+class BroadcastSession(BaseModel):
+    STATUS_CHOICES = (
+        ('PENDING',  'Kutilmoqda (input URL yubormagan)'),
+        ('ACTIVE',   'Faol (barcha output URL oldi)'),
+        ('CLOSED',   'Yakunlangan'),
+        ('FAILED',   'Xato'),
+    )
+
+    author = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='broadcast_sessions'
+    )
+    input_computer = models.ForeignKey(
+        'endpoints.Computer', on_delete=models.CASCADE,
+        related_name='broadcast_as_input',
+        help_text="Ekranini uzatuvchi PC (screen_share.exe shu yerda ishga tushadi)"
+    )
+    output_computers = models.ManyToManyField(
+        'endpoints.Computer', related_name='broadcast_as_output',
+        blank=True,
+        help_text="Ekranni ko'rsatuvchi PClar (brauzerdan URL'ga o'tishadi)"
+    )
+    duration = models.PositiveIntegerField(default=1800, help_text="Sessiya davomiyligi (sek)")
+    stream_url = models.URLField(max_length=500, blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Broadcast: {self.input_computer.hostname} → {self.output_computers.count()} outputs"
 

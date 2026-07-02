@@ -13,7 +13,11 @@ from django.core.paginator import Paginator
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.contrib.auth.decorators import login_required
-from tracking.models import AppUsageStatistic, ActivityLog, BlockedAttemptLog, ProcessAlertLog, ScreenShareSession, BlockedURL, BlockedProcess
+from tracking.models import (
+    AppUsageStatistic, ActivityLog, BlockedAttemptLog, ProcessAlertLog,
+    ScreenShareSession, BlockedURL, BlockedProcess,
+    ScreenshotRequest, BroadcastSession
+)
 from endpoints.consumers import LIVE_METRICS
 import json
 import hashlib
@@ -26,6 +30,11 @@ def get_secure_token():
     today = datetime.now().strftime("%Y-%m-%d")
     raw_string = f"{secret_word}-{today}"
     return hashlib.sha256(raw_string.encode()).hexdigest()
+
+
+def _computer_key(computer):
+    """LIVE_METRICS va WS group uchun kalit (device_id afzal, bios_uuid fallback)."""
+    return computer.device_id or computer.bios_uuid
 
 def login_view(request):
     # 1. Agar foydalanuvchi allaqachon tizimga kirgan bo'lsa, asosiy sahifaga yo'naltiramiz
@@ -206,8 +215,13 @@ def device_list_view(request):
 @login_required
 def create_remote_session_view(request, bios_uuid):
     if request.method == 'POST':
-        computer = get_object_or_404(Computer, bios_uuid=bios_uuid)
-        
+        # URL parametri 'bios_uuid' deb atalgan, lekin device_id ham bo'lishi mumkin
+        computer = Computer.objects.filter(
+            Q(device_id=bios_uuid) | Q(bios_uuid=bios_uuid)
+        ).first()
+        if not computer:
+            return JsonResponse({"error": "Kompyuter topilmadi"}, status=404)
+
         if not computer.is_online:
             return JsonResponse({"error": "Bu kompyuter hozir oflayn."}, status=400)
 
@@ -230,8 +244,8 @@ def create_remote_session_view(request, bios_uuid):
 
         # 3. Agentga xabar yuboramiz
         channel_layer = get_channel_layer()
-        group_name = f"pc_{bios_uuid}" 
-        
+        group_name = f"pc_{_computer_key(computer)}"
+
         command_payload = {
             "type": "remote_controll",
             "action": duration,
@@ -243,7 +257,7 @@ def create_remote_session_view(request, bios_uuid):
         async_to_sync(channel_layer.group_send)(
             group_name,
             {
-                "type": "execute_command", 
+                "type": "execute_command",
                 "data": command_payload
             }
         )
@@ -271,7 +285,7 @@ def device_detail_view(request, pk):
     computer = get_object_or_404(Computer, id=pk)
 
     if request.GET.get('metrics_only') == '1':
-        return JsonResponse(LIVE_METRICS.get(computer.bios_uuid) or {})
+        return JsonResponse(LIVE_METRICS.get(_computer_key(computer)) or {})
 
     current_tab = request.GET.get('tab', 'usage')
     search_query = request.GET.get('search', '')
@@ -293,7 +307,7 @@ def device_detail_view(request, pk):
         'time_filter': time_filter,
         'secure_token': get_secure_token(),
         'latest_stream_url': latest_stream_url,
-        'live_metrics': LIVE_METRICS.get(computer.bios_uuid),
+        'live_metrics': LIVE_METRICS.get(_computer_key(computer)),
     }
 
     # ==========================================
@@ -368,6 +382,17 @@ def device_detail_view(request, pk):
     elif current_tab == 'sessions':
         qs = ScreenShareSession.objects.filter(computer=computer).order_by('-created_at')
 
+    elif current_tab == 'updates':
+        # Update tarixi + hozir kutilayotgan UPDATE buyruqlari
+        # (uninstall/restart bu tabga tegishli emas — u faqat Django admin'da ko'rinadi)
+        from commands.models import UpdateLog, PendingCommand
+        qs = UpdateLog.objects.filter(computer=computer).order_by('-created_at')
+        context['pending_commands'] = PendingCommand.objects.filter(
+            computer=computer,
+            action=PendingCommand.ACTION_UPDATE,
+            acknowledged_at__isnull=True,
+        ).select_related('release').order_by('-created_at')
+
     if qs is not None:
         paginator = Paginator(qs, 15)
         page_number = request.GET.get('page')
@@ -397,27 +422,29 @@ def group_detail_view(request, pk):
 def group_metrics_view(request, pk):
     group = get_object_or_404(Group, id=pk)
     computers = Computer.objects.filter(group=group).values(
-        'bios_uuid', 'hostname', 'is_online', 'id', 'ram_gb', 'last_seen'
+        'device_id', 'bios_uuid', 'hostname', 'is_online', 'id', 'ram_gb', 'last_seen'
     )
 
     result = {}
     for pc in computers:
         last_seen = pc['last_seen']
         if last_seen:
-            # Toshkent vaqtiga o'tkazamiz va formatlayamiz
             from django.utils import timezone as tz
             local_time = last_seen.astimezone(tz.get_current_timezone())
             last_seen_str = local_time.strftime('%d.%m.%Y %H:%M')
         else:
             last_seen_str = '—'
 
-        result[pc['bios_uuid']] = {
+        # Kalit — device_id afzal (yangi agentlar), bios_uuid fallback (eski)
+        key = pc['device_id'] or pc['bios_uuid']
+
+        result[key] = {
             'hostname':  pc['hostname'],
             'is_online': pc['is_online'],
             'pk':        pc['id'],
             'ram_gb':    float(pc['ram_gb'] or 0),
             'last_seen': last_seen_str,
-            'metrics':   LIVE_METRICS.get(pc['bios_uuid']) or {},
+            'metrics':   LIVE_METRICS.get(key) or {},
         }
     online_total = sum(1 for v in result.values() if v['is_online'])
     return JsonResponse({'pcs': result, 'online_count': online_total, 'total_count': len(result)})
@@ -458,11 +485,15 @@ def group_command_view(request, pk):
     channel_layer = get_channel_layer()
 
     if target_uuid:
-        computer = get_object_or_404(Computer, bios_uuid=target_uuid, group=group)
+        computer = Computer.objects.filter(
+            Q(device_id=target_uuid) | Q(bios_uuid=target_uuid), group=group
+        ).first()
+        if not computer:
+            return JsonResponse({'error': 'PC topilmadi', 'sent': 0}, status=404)
         if not computer.is_online:
             return JsonResponse({'error': 'Bu PC oflayn', 'sent': 0})
         async_to_sync(channel_layer.group_send)(
-            f'pc_{target_uuid}',
+            f'pc_{_computer_key(computer)}',
             {'type': 'execute_command', 'data': {'type': 'do_command', 'action': shell_cmd, 'message': '', 'payload': {}}}
         )
         sent = 1
@@ -517,10 +548,6 @@ def device_command_view(request, pk):
     elif command == 'delete_path':
         if not path_param:
             return JsonResponse({'error': "Yo'l kiritilmadi"}, status=400)
-        # Tizim papkalaridan himoya
-        forbidden = ['C:\\Windows', 'C:\\Program Files', 'C:\\Users\\All Users', 'C:\\ProgramData\\Nigoh']
-        if any(path_param.lower().startswith(f.lower()) for f in forbidden):
-            return JsonResponse({'error': "Bu yo'lni o'chirish taqiqlangan"}, status=403)
         # Fayl yoki papkani o'chirish (PowerShell sintaksisi)
         # Bitta tirnoq ishlatamiz — C# -Command "..." ichida ikki tirnoq stringni buzadi
         shell_cmd = f"Remove-Item -Recurse -Force '{path_param}' -ErrorAction SilentlyContinue"
@@ -533,10 +560,201 @@ def device_command_view(request, pk):
 
     channel_layer = get_channel_layer()
     async_to_sync(channel_layer.group_send)(
-        f'pc_{computer.bios_uuid}',
+        f'pc_{_computer_key(computer)}',
         {'type': 'execute_command', 'data': {'type': 'do_command', 'action': shell_cmd, 'message': '', 'payload': {}}}
     )
     return JsonResponse({'status': 'ok', 'command': command})
+
+
+# ============================================================
+# SCREENSHOT — admin bir marta rasm oladi
+# ============================================================
+
+@login_required
+def request_screenshot_view(request, pk):
+    """
+    Admin 'Ekranni rasmga olish' tugmasini bosadi.
+    - ScreenshotRequest yozuvi yaratiladi (audit: kim so'radi)
+    - WS orqali agentga xabar yuboriladi
+    - Frontend'ga yaratilgan request_id qaytariladi (poll qilish uchun)
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    computer = get_object_or_404(Computer, id=pk)
+    if not computer.is_online:
+        return JsonResponse({'error': 'Bu PC oflayn'}, status=400)
+
+    ssr = ScreenshotRequest.objects.create(
+        computer=computer,
+        requested_by=request.user,
+        status='PENDING',
+    )
+
+    channel_layer = get_channel_layer()
+    ws_key = computer.device_id or computer.bios_uuid
+    async_to_sync(channel_layer.group_send)(
+        f'pc_{ws_key}',
+        {
+            'type': 'execute_command',
+            'data': {
+                'type': 'take_screenshot',
+                'action': 'capture',
+                'payload': {'request_id': str(ssr.id)},
+            },
+        }
+    )
+
+    return JsonResponse({
+        'status': 'pending',
+        'request_id': str(ssr.id),
+    })
+
+
+@login_required
+def poll_screenshot_view(request, pk, req_id):
+    """Frontend 1-2 sekundda bir marta poll qiladi — rasm keldimi."""
+    ssr = get_object_or_404(ScreenshotRequest, id=req_id, computer_id=pk)
+    return JsonResponse({
+        'status': ssr.status,
+        'image_url': ssr.image.url if ssr.image else None,
+        'error': ssr.error_message,
+    })
+
+
+# ============================================================
+# BROADCAST — 1 input → N outputs (screen sharing multiplex)
+# ============================================================
+
+@login_required
+def broadcast_start_view(request):
+    """
+    Admin (o'qituvchi) broadcast boshlaydi.
+    Body: {
+        "input_id":   "<computer.id>",
+        "output_ids": ["<id>", "<id>"],  // yoki []
+        "group_id":   "<group.id>",       // group ichidagi barcha PClarni output qilish uchun
+        "duration":   1800
+    }
+    Bittasidan biri: output_ids YOKI group_id (yoki ikkalasi ham).
+    Input PC ga 'screen_share' buyrug'i yuboriladi (mavjud ScreenShareManager qabul qiladi).
+    Input agent screen_share.exe ni ishga tushirib, hosil bo'lgan URL ni yuboradi.
+    URL kelgach, output PClarga 'do_command' → explorer.exe <URL> yuboriladi.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    try:
+        data = json.loads(request.body or b'{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    input_id = data.get('input_id')
+    output_ids = data.get('output_ids') or []
+    group_id = data.get('group_id')
+    duration = int(data.get('duration') or 1800)
+
+    if not input_id:
+        return JsonResponse({'error': 'input_id majburiy'}, status=400)
+
+    input_pc = get_object_or_404(Computer, id=input_id)
+    if not input_pc.is_online:
+        return JsonResponse({'error': 'Input PC oflayn'}, status=400)
+
+    outputs = list(Computer.objects.filter(id__in=output_ids))
+    if group_id:
+        outputs += list(Computer.objects.filter(group_id=group_id).exclude(id=input_pc.id))
+    outputs = list({p.id: p for p in outputs}.values())  # unikallashtiramiz
+
+    if not outputs:
+        return JsonResponse({'error': 'Kamida bitta output PC tanlang'}, status=400)
+
+    session = BroadcastSession.objects.create(
+        author=request.user,
+        input_computer=input_pc,
+        duration=duration,
+        status='PENDING',
+    )
+    session.output_computers.set(outputs)
+
+    # Input PC'ga screen_share buyrug'ini yuboramiz (ScreenShareManager qabul qiladi)
+    channel_layer = get_channel_layer()
+    input_key = input_pc.device_id or input_pc.bios_uuid
+    async_to_sync(channel_layer.group_send)(
+        f'pc_{input_key}',
+        {
+            'type': 'execute_command',
+            'data': {
+                'type':   'screen_share',
+                'action': duration,
+                'payload': {
+                    'session_id': str(session.id),
+                    'broadcast':  True,
+                },
+            },
+        }
+    )
+
+    return JsonResponse({
+        'status': 'pending',
+        'session_id': str(session.id),
+        'outputs': [str(o.id) for o in outputs],
+    })
+
+
+@login_required
+def broadcast_agent_url_view(request, session_id):
+    """
+    Input agent screen_share.exe ni ishga tushirib, hosil bo'lgan URL'ni shu yerga PATCH qiladi.
+    Backend URL'ni saqlab, barcha output PClarga 'open_url' buyrug'ini yuboradi.
+    """
+    if request.method not in ('POST', 'PATCH', 'PUT'):
+        return JsonResponse({'error': 'POST/PATCH only'}, status=405)
+
+    session = get_object_or_404(BroadcastSession, id=session_id)
+
+    try:
+        data = json.loads(request.body or b'{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    url = (data.get('url') or '').strip().rstrip('/')
+    if not url:
+        return JsonResponse({'error': 'url majburiy'}, status=400)
+
+    session.stream_url = url
+    session.status = 'ACTIVE'
+    session.save(update_fields=['stream_url', 'status'])
+
+    # Har bir output'ga brauzerda URL ochish buyrug'i
+    channel_layer = get_channel_layer()
+    for out_pc in session.output_computers.filter(is_online=True):
+        key = out_pc.device_id or out_pc.bios_uuid
+        async_to_sync(channel_layer.group_send)(
+            f'pc_{key}',
+            {
+                'type': 'execute_command',
+                'data': {
+                    'type':   'do_command',
+                    'action': f'explorer.exe "{url}"',
+                    'message': '',
+                    'payload': {'broadcast_session': str(session.id)},
+                },
+            }
+        )
+
+    return JsonResponse({'status': 'active', 'url': url})
+
+
+@login_required
+def broadcast_status_view(request, session_id):
+    """Frontend 1-2 sek polling qiladi — session faollashdimi."""
+    s = get_object_or_404(BroadcastSession, id=session_id)
+    return JsonResponse({
+        'status': s.status,
+        'stream_url': s.stream_url,
+        'outputs': s.output_computers.count(),
+    })
 
 
 def group_stats_view(request, pk):

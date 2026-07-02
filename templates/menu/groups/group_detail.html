@@ -211,8 +211,8 @@
                         {% for pc in computers %}
                         <div class="col-md-6 col-xl-4 mb-3">
                             <div class="pc-card p-3 {% if pc.is_online %}online{% else %}offline{% endif %}"
-                                 id="pc-{{ pc.bios_uuid }}"
-                                 data-uuid="{{ pc.bios_uuid }}"
+                                 id="pc-{{ pc.key }}"
+                                 data-uuid="{{ pc.key }}"
                                  data-pk="{{ pc.id }}"
                                  data-ram-gb="{{ pc.ram_gb|default:0 }}"
                                  data-last-seen="{{ pc.last_seen|date:'d.m.Y H:i' }}"
@@ -228,7 +228,7 @@
                                             </span>
                                         </div>
                                         <div class="text-muted" style="font-size:0.72rem; margin-top:2px; margin-left:14px;">
-                                            {{ pc.bios_uuid|truncatechars:20 }}
+                                            {{ pc.key|truncatechars:20 }}
                                         </div>
                                     </div>
                                     <!-- Individual command dropdown -->
@@ -240,20 +240,20 @@
                                             </button>
                                             <div class="dropdown-menu dropdown-menu-right" style="background:rgba(20,20,30,0.97); border:1px solid rgba(255,255,255,0.15); min-width:160px;">
                                                 <button class="dropdown-item text-white" style="font-size:0.83rem;"
-                                                    onclick="sendCmd('lock','{{ pc.bios_uuid }}','{{ pc.hostname }}')">
+                                                    onclick="sendCmd('lock','{{ pc.key }}','{{ pc.hostname }}')">
                                                     <i class="zmdi zmdi-lock mr-2" style="color:#2196F3;"></i> Ekranni Qulflash
                                                 </button>
                                                 <button class="dropdown-item text-white" style="font-size:0.83rem;"
-                                                    onclick="confirmSingleCmd('restart','{{ pc.bios_uuid }}','{{ pc.hostname }}')">
+                                                    onclick="confirmSingleCmd('restart','{{ pc.key }}','{{ pc.hostname }}')">
                                                     <i class="zmdi zmdi-refresh mr-2" style="color:#ffa726;"></i> Qayta Ishga Tushirish
                                                 </button>
                                                 <button class="dropdown-item text-white" style="font-size:0.83rem;"
-                                                    onclick="confirmSingleCmd('shutdown','{{ pc.bios_uuid }}','{{ pc.hostname }}')">
+                                                    onclick="confirmSingleCmd('shutdown','{{ pc.key }}','{{ pc.hostname }}')">
                                                     <i class="zmdi zmdi-power mr-2" style="color:#ff5252;"></i> O'chirish
                                                 </button>
                                                 <div class="dropdown-divider" style="border-color:rgba(255,255,255,0.1);"></div>
                                                 <button class="dropdown-item text-white" style="font-size:0.83rem;"
-                                                    onclick="openUrlSingle('{{ pc.bios_uuid }}','{{ pc.hostname }}')">
+                                                    onclick="openUrlSingle('{{ pc.key }}','{{ pc.hostname }}')">
                                                     <i class="zmdi zmdi-open-in-browser mr-2" style="color:#66bb6a;"></i> URL Ochish
                                                 </button>
                                             </div>
@@ -262,7 +262,7 @@
                                 </div>
 
                                 <!-- Metrics -->
-                                <div class="pc-metrics" id="metrics-{{ pc.bios_uuid }}">
+                                <div class="pc-metrics" id="metrics-{{ pc.key }}">
                                     {% with m=live_metrics|default_if_none:None %}
                                     {% if pc.is_online %}
                                         {% with met=live_metrics %}
@@ -638,7 +638,7 @@ function pollMetrics() {
 {% for pc in computers %}
 {% if pc.is_online %}
 (function(){
-    var uuid = '{{ pc.bios_uuid }}';
+    var uuid = '{{ pc.key }}';
     {% with met=live_metrics %}
     // Server side initial render — JS poll will override immediately
     {% endwith %}

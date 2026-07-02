@@ -1,5 +1,9 @@
 from django.contrib import admin
-from .models import BlockedURL, BlockedAttemptLog, ActivityLog, BlockedProcess, ProcessAlertLog, AppUsageStatistic, ScreenShareSession, RemoteControlSession
+from .models import (
+    BlockedURL, BlockedAttemptLog, ActivityLog, BlockedProcess, ProcessAlertLog,
+    AppUsageStatistic, ScreenShareSession, RemoteControlSession,
+    ScreenshotRequest, BroadcastSession
+)
 from django.utils.html import format_html
 import hashlib
 from datetime import datetime
@@ -8,6 +12,56 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import BroadcastComputer
 from django.shortcuts import render
+
+
+# ============================================================
+# SCREENSHOT AUDIT — kim, qachon, qaysi PC'dan
+# ============================================================
+@admin.register(ScreenshotRequest)
+class ScreenshotRequestAdmin(admin.ModelAdmin):
+    list_display = ('computer', 'requested_by', 'status', 'preview', 'created_at', 'completed_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('computer__hostname', 'computer__device_id', 'requested_by__username')
+    readonly_fields = ('computer', 'requested_by', 'status', 'image', 'delivered_at',
+                       'completed_at', 'error_message', 'preview_large',
+                       'created_at', 'updated_at')
+    fields = ('computer', 'requested_by', 'status', 'preview_large',
+              'delivered_at', 'completed_at', 'error_message',
+              'created_at', 'updated_at')
+
+    def has_add_permission(self, request):
+        return False  # Faqat agent tomonidan yaratiladi
+
+    def preview(self, obj):
+        if obj.image:
+            return format_html(
+                '<a href="{0}" target="_blank"><img src="{0}" style="max-height:60px;max-width:120px;border:1px solid #444"/></a>',
+                obj.image.url
+            )
+        return '—'
+    preview.short_description = "Ko'rinishi"
+
+    def preview_large(self, obj):
+        if obj.image:
+            return format_html(
+                '<a href="{0}" target="_blank"><img src="{0}" style="max-width:800px;border:1px solid #444"/></a>',
+                obj.image.url
+            )
+        return 'Rasm hali yuklanmagan'
+    preview_large.short_description = "To'liq rasm"
+
+
+@admin.register(BroadcastSession)
+class BroadcastSessionAdmin(admin.ModelAdmin):
+    list_display = ('input_computer', 'output_count', 'author', 'status', 'created_at')
+    list_filter = ('status',)
+    search_fields = ('input_computer__hostname', 'author__username')
+    readonly_fields = ('stream_url', 'created_at', 'updated_at')
+    filter_horizontal = ('output_computers',)
+
+    def output_count(self, obj):
+        return obj.output_computers.count()
+    output_count.short_description = "Chiquvchi PClar soni"
 
 @admin.register(BlockedURL)
 class BlockedURLAdmin(admin.ModelAdmin):

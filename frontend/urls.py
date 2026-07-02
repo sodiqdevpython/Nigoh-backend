@@ -22,4 +22,13 @@ urlpatterns = [
 
     path('blocked-urls/', v.blocked_urls_view, name='blocked_urls'),
     path('blocked-processes/', v.blocked_processes_view, name='blocked_processes'),
+
+    # Screenshot — bosilganda so'rov yaratadi va WS orqali agentga yuboradi
+    path('device/<str:pk>/screenshot-request/', v.request_screenshot_view, name='request_screenshot'),
+    path('device/<str:pk>/screenshot-poll/<uuid:req_id>/', v.poll_screenshot_view, name='poll_screenshot'),
+
+    # Broadcast (screen share)
+    path('broadcast/start/', v.broadcast_start_view, name='broadcast_start'),
+    path('broadcast/agent-url/<uuid:session_id>/', v.broadcast_agent_url_view, name='broadcast_agent_url'),
+    path('broadcast/status/<uuid:session_id>/', v.broadcast_status_view, name='broadcast_status'),
 ]

@@ -1,5 +1,10 @@
 from django.urls import path
-from .views import ReportBlockedURLView, BlacklistVersionView, ReportActivityLogView, ProcessBlacklistVersionView, ReportProcessAlertView, ReportAppUsageView, RequestScreenShareView, AgentScreenShareResponseView, AgentScreenShareUpdateView, RequestRemoteControlView, AgentRemoteControlUpdateView
+from .views import (
+    ReportBlockedURLView, BlacklistVersionView, ReportActivityLogView,
+    ProcessBlacklistVersionView, ReportProcessAlertView, ReportAppUsageView,
+    RequestScreenShareView, AgentScreenShareResponseView, AgentScreenShareUpdateView,
+    RequestRemoteControlView, AgentRemoteControlUpdateView, ScreenshotUploadView
+)
 
 urlpatterns = [
     # Agent POST so'rov yuboradigan manzil
@@ -13,6 +18,9 @@ urlpatterns = [
     path('report-process-alert/', ReportProcessAlertView.as_view(), name='report-process-alert'),
 
     path('report-app-usage/', ReportAppUsageView.as_view(), name='report-app-usage'),
+
+    # Screenshot — agent rasmni multipart bilan yuklaydi
+    path('screenshot-upload/', ScreenshotUploadView.as_view(), name='screenshot-upload'),
 
     # screen share uchun
     # O'qituvchi POST qiladi (n=soniya body'da ketishi ham mumkin, URL dan olinmaydi)

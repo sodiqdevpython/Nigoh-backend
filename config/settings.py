@@ -50,7 +50,12 @@ INSTALLED_APPS = [
     'endpoints',
     'tracking',
     'commands',
-    'frontend'
+    'frontend',
+
+    # MUHIM: django_cleanup HAR DOIM eng oxirida bo'lishi kerak.
+    # Model o'chirilganda tegishli FileField/ImageField fayllarini
+    # avtomatik ravishda media dan o'chiradi.
+    'django_cleanup.apps.CleanupConfig',
 ]
 
 # PASSWORD_HASHERS = [

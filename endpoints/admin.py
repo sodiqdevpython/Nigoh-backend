@@ -8,6 +8,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Group, Computer
 from .consumers import LIVE_METRICS
+from commands.services import trigger_uninstall, trigger_update
 
 # --- SOCKET ORQALI BUYRUQ YUBORISH FUNKSIYASI ---
 def send_socket_command(room_name, action_name, extra_data=None):
@@ -68,15 +69,24 @@ class GroupAdmin(admin.ModelAdmin):
 @admin.register(Computer)
 class ComputerAdmin(admin.ModelAdmin):
     list_display = (
-        'hostname', 'bios_uuid', 'group', 'is_online',
+        'hostname', 'device_id_short', 'agent_version', 'watchdog_version',
+        'group', 'is_online',
         'cpu_display', 'ram_display', 'disk_display', 'network_display',
         'last_seen',
     )
-    list_filter = ('is_online', 'group')
-    search_fields = ('hostname', 'bios_uuid')
+    list_filter = ('is_online', 'group', 'agent_version', 'watchdog_version')
+    search_fields = ('hostname', 'bios_uuid', 'device_id')
+    readonly_fields = ('auth_token', 'last_version_report', 'last_seen')
+
+    def device_id_short(self, obj):
+        if obj.device_id:
+            return obj.device_id[:12] + '...'
+        return obj.bios_uuid or '—'
+    device_id_short.short_description = 'Device ID'
 
     def _m(self, obj):
-        return LIVE_METRICS.get(obj.bios_uuid)
+        # LIVE_METRICS device_id afzal, eski agentlar uchun bios_uuid bilan ham tekshiriladi
+        return LIVE_METRICS.get(obj.device_id) or LIVE_METRICS.get(obj.bios_uuid)
 
     def cpu_display(self, obj):
         m = self._m(obj)
@@ -119,8 +129,58 @@ class ComputerAdmin(admin.ModelAdmin):
         return format_html('<span style="color:#009688">{} Kbps</span>', m['network'])
     network_display.short_description = 'Tarmoq'
     
-    # Yangi dinamik harakatni ro'yxatga qo'shamiz
-    actions = ['send_custom_command']
+    # Yangi dinamik harakatni ro'yxatga qo'shamiz.
+    # Uninstall — faqat superuser uchun (asosiy frontendda ko'rinmaydi).
+    actions = ['send_custom_command', 'trigger_active_update', 'force_uninstall_selected']
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # Uninstall — faqat superuser ko'radi. Bu action asosiy front web'ga
+        # qo'shilmagan, faqat Django admin ichida.
+        if not request.user.is_superuser and 'force_uninstall_selected' in actions:
+            del actions['force_uninstall_selected']
+        return actions
+
+    @admin.action(description="Aktiv Nigoh release'ini yuborish (retry qo'shiladi)")
+    def trigger_active_update(self, request, queryset):
+        sent = 0
+        errors = 0
+        for computer in queryset:
+            try:
+                trigger_update(computer)  # aktiv release'ni avtomatik oladi
+                sent += 1
+            except ValueError as e:
+                errors += 1
+                self.message_user(request, str(e), level=messages.ERROR)
+                break
+            except Exception as e:
+                errors += 1
+                self.message_user(request, f"{computer.hostname}: {e}", level=messages.WARNING)
+        if sent:
+            self.message_user(
+                request,
+                f"{sent} ta agentga update navbatga qo'yildi (offline bo'lsa online bo'lganda yuboriladi)",
+                level=messages.SUCCESS,
+            )
+
+    @admin.action(description="⚠️ TO'LIQ O'CHIRISH — agentni va Watchdog service ni o'chiradi")
+    def force_uninstall_selected(self, request, queryset):
+        if not request.user.is_superuser:
+            self.message_user(
+                request,
+                "Bu amalni faqat superuser bajara oladi",
+                level=messages.ERROR,
+            )
+            return
+        sent = 0
+        for computer in queryset:
+            trigger_uninstall(computer)
+            sent += 1
+        self.message_user(
+            request,
+            f"{sent} ta agentga to'liq uninstall yuborildi (offline bo'lsa online bo'lganda bajariladi)",
+            level=messages.SUCCESS,
+        )
 
     @admin.action(description="Buyruq yuborish")
     def send_custom_command(self, request, queryset):
@@ -142,8 +202,11 @@ class ComputerAdmin(admin.ModelAdmin):
             
             for pc in queryset:
                 if pc.is_online:
+                    key = pc.device_id or pc.bios_uuid
+                    if not key:
+                        continue
                     async_to_sync(channel_layer.group_send)(
-                        f'pc_{pc.bios_uuid}',
+                        f'pc_{key}',
                         {
                             'type': 'execute_command',
                             'data': {

@@ -58,15 +58,20 @@
                                     <i class="zmdi zmdi-desktop-windows mr-2" style="color: #a0a0a0;"></i> 
                                     {{ computer.hostname|default:"Nomsiz Kompyuter" }}
                                 </h4>
-                                <p class="text-muted mb-0"><i class="zmdi zmdi-key mr-1"></i> UUID: <span class="text-light">{{ computer.bios_uuid }}</span></p>
+                                <p class="text-muted mb-0"><i class="zmdi zmdi-key mr-1"></i> Device ID: <span class="text-light">{{ computer.key|default:"—" }}</span></p>
                             </div>
                             <div class="text-right d-flex flex-column align-items-end">
                                 <div class="d-flex align-items-center mb-2">
                                     {% if computer.is_online %}
                                         <span class="badge px-3 py-2 mr-2" style="background: rgba(40, 167, 69, 0.2); color: #4caf50; border: 1px solid #4caf50; text-shadow: none;"><i class="zmdi zmdi-circle"></i> Onlayn</span>
-                                        
-                                        <button type="button" id="btnRemoteControl" class="btn btn-sm px-3 py-2" data-toggle="modal" data-target="#remoteControlModal" style="background: rgba(220, 53, 69, 0.8); color: white; border: 1px solid #dc3545; box-shadow: 0 0 10px rgba(220,53,69,0.3);">
+
+                                        <button type="button" id="btnRemoteControl" class="btn btn-sm px-3 py-2 mr-2" data-toggle="modal" data-target="#remoteControlModal" style="background: rgba(220, 53, 69, 0.8); color: white; border: 1px solid #dc3545; box-shadow: 0 0 10px rgba(220,53,69,0.3);">
                                             <i class="zmdi zmdi-remote-control text-white mr-1"></i> Boshqarish
+                                        </button>
+
+                                        <button type="button" id="btnScreenshot" class="btn btn-sm px-3 py-2" onclick="takeScreenshot()"
+                                                style="background: rgba(56, 193, 114, 0.8); color: white; border: 1px solid #38c172; box-shadow: 0 0 10px rgba(56,193,114,0.3);">
+                                            <i class="zmdi zmdi-camera text-white mr-1"></i> Ekranni rasmga olish
                                         </button>
                                     {% else %}
                                         <span class="badge px-3 py-2" style="background: rgba(220, 53, 69, 0.2); color: #ff5252; border: 1px solid #ff5252; text-shadow: none;"><i class="zmdi zmdi-circle-o"></i> Oflayn</span>
@@ -479,6 +484,7 @@
             <li class="nav-item"><a class="nav-link {% if current_tab == 'web_blocked' %}active{% endif %}" href="?tab=web_blocked"><i class="zmdi zmdi-globe mr-1"></i> Bloklangan Saytlar</a></li>
             <li class="nav-item"><a class="nav-link {% if current_tab == 'app_blocked' %}active{% endif %}" href="?tab=app_blocked"><i class="zmdi zmdi-block mr-1"></i> Bloklangan Dasturlar</a></li>
             <li class="nav-item"><a class="nav-link {% if current_tab == 'sessions' %}active{% endif %}" href="?tab=sessions"><i class="zmdi zmdi-videocam mr-1"></i> Sessiyalar</a></li>
+            <li class="nav-item"><a class="nav-link {% if current_tab == 'updates' %}active{% endif %}" href="?tab=updates"><i class="zmdi zmdi-refresh mr-1"></i> Yangilanishlar</a></li>
         </ul>
 
         {% if current_tab != 'sessions' %}
@@ -819,6 +825,103 @@
                             </tbody>
                         </table>
                     </div>
+
+                {% elif current_tab == 'updates' %}
+                    {# ===== JORIY VERSIYALAR ===== #}
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="p-3 rounded" style="background: rgba(76, 175, 80, 0.1); border: 1px solid rgba(76, 175, 80, 0.3);">
+                                <div class="text-muted small mb-1">Agent versiya (Nigoh.exe)</div>
+                                <div class="h4 mb-0 text-white">{{ computer.agent_version|default:"—" }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 rounded" style="background: rgba(33, 150, 243, 0.1); border: 1px solid rgba(33, 150, 243, 0.3);">
+                                <div class="text-muted small mb-1">Watchdog versiya</div>
+                                <div class="h4 mb-0 text-white">{{ computer.watchdog_version|default:"—" }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 rounded" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15);">
+                                <div class="text-muted small mb-1">Oxirgi versiya xabari</div>
+                                <div class="h6 mb-0 text-white">{{ computer.last_version_report|date:"d M Y, H:i"|default:"—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# ===== KUTILAYOTGAN YANGILANISHLAR ===== #}
+                    {% if pending_commands %}
+                    <div class="mb-4">
+                        <h5 class="text-white mb-3"><i class="zmdi zmdi-time mr-2"></i>Kutilayotgan yangilanishlar</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover table-glass mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Release</th>
+                                        <th>Urinishlar</th>
+                                        <th>Yaratildi</th>
+                                        <th>Oxirgi urinish</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for cmd in pending_commands %}
+                                    <tr>
+                                        <td>{% if cmd.release %}<span class="text-white">{{ cmd.release.target }} v{{ cmd.release.version }}</span>{% else %}—{% endif %}</td>
+                                        <td>
+                                            {% if cmd.attempts >= 5 %}
+                                                <span class="badge px-2 py-1" style="background: rgba(244, 67, 54, 0.2); color: #ef5350; border: 1px solid #ef5350; text-shadow: none;">{{ cmd.attempts }}/5 · bekor</span>
+                                            {% elif cmd.attempts > 0 %}
+                                                <span class="badge px-2 py-1" style="background: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; text-shadow: none;">{{ cmd.attempts }}/5</span>
+                                            {% else %}
+                                                <span class="text-muted">0/5 · kutmoqda</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ cmd.created_at|date:"d M, H:i" }}</td>
+                                        <td>{{ cmd.delivered_at|date:"d M, H:i"|default:"—" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {# ===== UPDATE TARIXI ===== #}
+                    <h5 class="text-white mb-3"><i class="zmdi zmdi-time-restore mr-2"></i>Yangilanish tarixi</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-glass mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Sana</th>
+                                    <th>Target</th>
+                                    <th>Eski versiya</th>
+                                    <th>Yangi versiya</th>
+                                    <th>Holat</th>
+                                    <th>Xato</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in page_obj %}
+                                <tr>
+                                    <td>{{ log.created_at|date:"d M Y, H:i" }}</td>
+                                    <td>{{ log.target }}</td>
+                                    <td>{{ log.from_version|default:"—" }}</td>
+                                    <td class="font-weight-bold text-white">{{ log.to_version }}</td>
+                                    <td>
+                                        {% if log.success %}
+                                            <span class="badge px-2 py-1" style="background: rgba(40, 167, 69, 0.2); color: #4caf50; border: 1px solid #4caf50; text-shadow: none;">✓ Muvaffaqiyat</span>
+                                        {% else %}
+                                            <span class="badge px-2 py-1" style="background: rgba(244, 67, 54, 0.2); color: #ef5350; border: 1px solid #ef5350; text-shadow: none;">✗ Xato</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-muted small">{{ log.error|truncatechars:60|default:"—" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="6" class="text-center py-5 text-muted">Yangilanish tarixi bo'sh</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 {% endif %}
 
             </div>
@@ -926,7 +1029,7 @@
 
                 // API ga yangi sessiya yaratish bo'yicha so'rov (eskilari o'chadi)
                 try {
-                    const response = await fetch(`{% url 'remote_control_request' computer.bios_uuid %}`, {
+                    const response = await fetch(`{% url 'remote_control_request' computer.key %}`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1009,5 +1112,116 @@
         clearInterval(pollInterval);
     });
 </script>
+
+
+<!-- ============================================================
+     SCREENSHOT MODAL
+     ============================================================ -->
+<div class="modal fade" id="screenshotModal" tabindex="-1" role="dialog" data-backdrop="static" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content" style="background:#181c24; border:1px solid rgba(255,255,255,0.1);">
+            <div class="modal-header border-bottom-light-3">
+                <h5 class="modal-title text-white"><i class="zmdi zmdi-camera mr-2 text-success"></i> Ekran rasmi</h5>
+                <button type="button" class="close text-light" data-dismiss="modal" style="opacity:0.7;"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body text-light text-center">
+                <div id="ssLoading">
+                    <div class="spinner-border text-success mb-3" style="width:3rem;height:3rem;" role="status"></div>
+                    <h6 class="text-white">Agent ekranni olmoqda...</h6>
+                    <p class="text-muted small">Iltimos, kutib turing.</p>
+                </div>
+                <div id="ssResult" style="display:none;">
+                    <img id="ssImage" src="" style="max-width:100%; border:1px solid rgba(255,255,255,0.1); border-radius:6px;"/>
+                    <div class="mt-3 text-muted small" id="ssMeta"></div>
+                </div>
+                <div id="ssError" style="display:none;">
+                    <div class="alert p-3 mb-0" style="background: rgba(220, 53, 69, 0.15); border: 1px solid rgba(220, 53, 69, 0.5); color: #ff5252;">
+                        <i class="zmdi zmdi-close-circle mr-1"></i> <span id="ssErrorText">Xato</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top-light-3">
+                <a id="ssDownload" href="#" download class="btn btn-sm btn-success" style="display:none;">
+                    <i class="zmdi zmdi-download mr-1"></i> Yuklab olish
+                </a>
+                <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Yopish</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var ssPollTimer = null;
+        var ssRequestId = null;
+
+        function ssReset() {
+            document.getElementById('ssLoading').style.display = 'block';
+            document.getElementById('ssResult').style.display = 'none';
+            document.getElementById('ssError').style.display = 'none';
+            document.getElementById('ssDownload').style.display = 'none';
+            document.getElementById('ssImage').src = '';
+        }
+
+        function ssShowError(msg) {
+            if (ssPollTimer) clearInterval(ssPollTimer);
+            document.getElementById('ssLoading').style.display = 'none';
+            document.getElementById('ssErrorText').innerText = msg;
+            document.getElementById('ssError').style.display = 'block';
+        }
+
+        window.takeScreenshot = function () {
+            ssReset();
+            $('#screenshotModal').modal('show');
+
+            fetch(`{% url 'request_screenshot' computer.id %}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) { ssShowError(data.error); return; }
+                ssRequestId = data.request_id;
+                // Poll every 1.5 sec, max 30 sec
+                var attempts = 0;
+                ssPollTimer = setInterval(function () {
+                    attempts++;
+                    if (attempts > 20) {
+                        ssShowError("Agentdan javob kelmadi (30 sek kutildi)");
+                        return;
+                    }
+                    fetch(`/device/{{ computer.id }}/screenshot-poll/${ssRequestId}/`)
+                        .then(r => r.json())
+                        .then(pd => {
+                            if (pd.status === 'COMPLETED' && pd.image_url) {
+                                clearInterval(ssPollTimer);
+                                document.getElementById('ssLoading').style.display = 'none';
+                                var img = document.getElementById('ssImage');
+                                img.src = pd.image_url + '?t=' + Date.now();
+                                document.getElementById('ssResult').style.display = 'block';
+                                var dl = document.getElementById('ssDownload');
+                                dl.href = pd.image_url;
+                                dl.style.display = 'inline-block';
+                                document.getElementById('ssMeta').innerHTML =
+                                    '<i class="zmdi zmdi-time mr-1"></i>' + new Date().toLocaleTimeString();
+                            } else if (pd.status === 'FAILED') {
+                                ssShowError(pd.error || 'Agent xatolik yubordi');
+                            }
+                        })
+                        .catch(err => console.error(err));
+                }, 1500);
+            })
+            .catch(err => ssShowError(err.message || 'Tarmoq xatosi'));
+        };
+
+        $('#screenshotModal').on('hidden.bs.modal', function () {
+            if (ssPollTimer) clearInterval(ssPollTimer);
+        });
+    })();
+</script>
+{% csrf_token %}
 
 {% endblock %}
