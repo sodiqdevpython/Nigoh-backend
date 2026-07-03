@@ -1018,21 +1018,27 @@ def external_connections_data_json(request):
 
         # Kompyuter -> AppUsageStatistic (keyboard/mouse) toplu ravishda
         # (bugungi kun uchun)
-        comp_app_pairs = set(
-            (a.computer_id, (a.app_name or '').lower())
-            for a in activities if a.computer_id
-        )
+        def _norm_app(name):
+            """Katta/kichik va .exe muammosini yechish uchun normalize."""
+            n = (name or '').lower().strip()
+            if n.endswith('.exe'):
+                n = n[:-4]
+            return n
+
+        comp_ids = list({a.computer_id for a in activities if a.computer_id})
         usage_map = {}
-        if comp_app_pairs:
-            comp_ids = list({p[0] for p in comp_app_pairs})
+        if comp_ids:
+            # Kunning oralig'ini kengaytiramiz — activity kun ichida, lekin
+            # AppUsageStatistic har xil momentda saqlangan bo'lishi mumkin
             usage_qs = AppUsageStatistic.objects.filter(
                 computer_id__in=comp_ids,
-                created_at__gte=start, created_at__lt=end,
+                created_at__gte=start - timedelta(days=1),
+                created_at__lt=end + timedelta(days=1),
             ).values('computer_id', 'app_name',
                      'keyboard_active_seconds', 'mouse_active_seconds',
                      'total_open_seconds', 'active_seconds', 'full_path')
             for u in usage_qs:
-                k = (u['computer_id'], (u['app_name'] or '').lower())
+                k = (u['computer_id'], _norm_app(u['app_name']))
                 # Agar bir app_name uchun bir necha yozuv bo'lsa — jamlaymiz
                 slot = usage_map.setdefault(k, {
                     'keyboard': 0, 'mouse': 0,
@@ -1068,7 +1074,7 @@ def external_connections_data_json(request):
             geo = geo_map.get(d)
             if not geo:
                 continue
-            usage = usage_map.get((a.computer_id, (a.app_name or '').lower()), {})
+            usage = usage_map.get((a.computer_id, _norm_app(a.app_name)), {})
             arcs.append({
                 'id':          str(a.id),
                 'computer_id': str(a.computer.id) if a.computer else '',

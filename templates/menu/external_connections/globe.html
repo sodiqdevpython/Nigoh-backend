@@ -2,6 +2,10 @@
 {% load l10n %}
 {% block content %}
 
+<!-- Leaflet — Google Maps kabi chuqur zoom uchun (Esri World Imagery bepul) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <style>
     /* ===== Umumiy — boshqa sahifalar bilan bir xil ===== */
     .bg-dark-transparent {
@@ -135,10 +139,56 @@
         color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 12px;
     }
     .tl-controls .date-input::-webkit-calendar-picker-indicator { filter: invert(1) opacity(0.6); }
-    .tl-slider { position: relative; height: 26px; background: rgba(255,255,255,0.04); border-radius: 4px; cursor: pointer; border: 1px solid rgba(255,255,255,0.06); }
-    .tl-progress { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, rgba(77,171,247,0.15), rgba(77,171,247,0.35)); border-radius: 4px; transition: width 0.5s linear; }
-    .tl-marker { position: absolute; top: -3px; bottom: -3px; width: 3px; background: #4dabf7; box-shadow: 0 0 10px #4dabf7, 0 0 20px rgba(77,171,247,0.6); transition: left 0.5s linear; border-radius: 2px; }
+    .tl-slider { position: relative; height: 32px; background: rgba(255,255,255,0.04); border-radius: 4px; cursor: pointer; border: 1px solid rgba(255,255,255,0.06); overflow: visible; }
+    .tl-progress { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, rgba(77,171,247,0.15), rgba(77,171,247,0.35)); border-radius: 4px; transition: width 0.5s linear; pointer-events: none; }
+    .tl-activities { position: absolute; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none; }
+    .tl-activity-dot { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.6); box-shadow: 0 0 4px rgba(255,255,255,0.3); }
+    .tl-activity-dot.hot { background: #ff9800; box-shadow: 0 0 6px #ff9800; }
+    .tl-marker {
+        position: absolute; top: -6px; bottom: -6px; width: 4px;
+        background: #4dabf7;
+        box-shadow: 0 0 10px #4dabf7, 0 0 20px rgba(77,171,247,0.6);
+        transition: left 0.3s linear; border-radius: 2px;
+        cursor: grab; z-index: 5;
+    }
+    .tl-marker.dragging { cursor: grabbing; transition: none; }
+    .tl-marker::before {
+        content: ''; position: absolute; left: -8px; right: -8px; top: -6px; bottom: -6px;
+        /* Kengroq hitbox — bosish oson bo'lishi uchun */
+    }
     .tl-labels { display: flex; justify-content: space-between; margin-top: 4px; color: #7d8fa8; font-size: 10px; font-family: monospace; }
+
+    /* Fullscreen button */
+    .fs-btn {
+        position: absolute; top: 12px; right: 12px; z-index: 15;
+        background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.12);
+        color: #fff; padding: 7px 10px; border-radius: 6px; cursor: pointer;
+        backdrop-filter: blur(10px); font-size: 13px; display: flex; align-items: center; gap: 6px;
+    }
+    .fs-btn:hover { background: rgba(77,171,247,0.2); border-color: #4dabf7; }
+    .fs-btn i { font-size: 16px; }
+    .globe-card:fullscreen .globe-inner { height: 100vh; }
+    .globe-card:fullscreen { background: #05070d; }
+
+    /* Detail map modal (Leaflet) */
+    .map-modal {
+        position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.85);
+        display: none; justify-content: center; align-items: center;
+    }
+    .map-modal.show { display: flex; }
+    .map-modal-body {
+        background: #0f1420; border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 10px; width: 90vw; height: 85vh; max-width: 1400px;
+        display: flex; flex-direction: column; overflow: hidden;
+    }
+    .map-modal-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 12px 18px; border-bottom: 1px solid rgba(255,255,255,0.1);
+        color: #fff;
+    }
+    .map-modal-header .close-btn { background: none; border: none; color: #adb5bd; font-size: 24px; cursor: pointer; }
+    .map-modal-header .close-btn:hover { color: #fff; }
+    #leafletMap { flex: 1; }
 
     /* ===== Loading ===== */
     .loading-overlay {
@@ -225,6 +275,12 @@
                                 </div>
                             </div>
 
+                            <!-- Fullscreen button -->
+                            <button class="fs-btn" id="btnFullscreen" title="To'liq ekran">
+                                <i class="zmdi zmdi-fullscreen"></i>
+                                <span class="fs-label">To'liq ekran</span>
+                            </button>
+
                             <div class="fallback-badge" id="fallbackBadge">
                                 <i class="zmdi zmdi-info-outline mr-1"></i>
                                 Bugun ma'lumot yo'q — oxirgi kunlar ko'rsatilmoqda
@@ -262,6 +318,25 @@
                                 <div class="row-line"><span class="k">Davlat</span><span class="v"><span class="flag" id="dFlag"></span><span id="dCountry">—</span></span></div>
                                 <div class="row-line"><span class="k">Shahar</span><span class="v" id="dCity">—</span></div>
                                 <div class="row-line"><span class="k">Provayder</span><span class="v" id="dOrg">—</span></div>
+
+                                <button id="btnOpenMap" class="fs-btn" style="position:static; margin-top:14px; width:100%; justify-content:center;">
+                                    <i class="zmdi zmdi-pin"></i>
+                                    <span>Batafsil xarita (uy darajasigacha)</span>
+                                </button>
+                            </div>
+
+                            <!-- Leaflet Modal — Google Maps ga o'xshash chuqur zoom -->
+                            <div class="map-modal" id="mapModal">
+                                <div class="map-modal-body">
+                                    <div class="map-modal-header">
+                                        <div>
+                                            <strong id="mapModalTitle">Manzil</strong>
+                                            <div class="text-muted small" id="mapModalSub">—</div>
+                                        </div>
+                                        <button class="close-btn" onclick="closeMapModal()">&times;</button>
+                                    </div>
+                                    <div id="leafletMap"></div>
+                                </div>
                             </div>
 
                             <!-- 3D Globe -->
@@ -285,6 +360,7 @@
                                 </div>
                                 <div class="tl-slider" id="tlSlider">
                                     <div class="tl-progress" id="tlProgress"></div>
+                                    <div class="tl-activities" id="tlActivities"></div>
                                     <div class="tl-marker" id="tlMarker"></div>
                                 </div>
                                 <div class="tl-labels">
@@ -432,17 +508,18 @@
         .ringRepeatPeriod(1400);
     globe.ringsData([{ lat: ORIGIN.lat, lng: ORIGIN.lng }]);
 
-    // Arc konfig
+    // Arc konfig — click hitbox kengaytirilgan
     globe
         .arcColor('color')
         .arcAltitudeAutoScale(0.4)
-        .arcStroke(0.4)
+        .arcStroke(0.9)                       // kengroq — bosish oson
         .arcDashLength(0.4)
         .arcDashGap(0.15)
         .arcDashAnimateTime(3500)
+        .arcsTransitionDuration(300)
         .arcLabel(d => d.tooltip)
-        .onArcClick(a => openDetail(a.raw))
-        .onArcHover(a => globeEl.style.cursor = a ? 'pointer' : 'grab');
+        .onArcClick(a => a && openDetail(a.raw))
+        .onArcHover(a => { globeEl.style.cursor = a ? 'pointer' : 'grab'; });
 
     function resizeGlobe() {
         const rect = globeEl.getBoundingClientRect();
@@ -550,11 +627,80 @@
     }
     setInterval(tick, TICK_INTERVAL_MS);
 
-    tlSlider.addEventListener('click', function(e) {
+    // Timeline'da faol vaqt nuqtalarini chizamiz
+    function renderActivityMarkers() {
+        const cont = document.getElementById('tlActivities');
+        if (!cont || !dayStart || !dayEnd) return;
+        cont.innerHTML = '';
+        const total = dayEnd - dayStart;
+
+        // Har vaqt segmentida (5 daq) nechta activity borligini sanaymiz
+        const bucketMs = 5 * 60 * 1000;
+        const buckets = {};
+        allActivities.forEach(a => {
+            const t = new Date(a.ts).getTime();
+            const bkey = Math.floor((t - dayStart) / bucketMs);
+            buckets[bkey] = (buckets[bkey] || 0) + 1;
+        });
+
+        // Har bucket uchun nuqta chizamiz (issiq = 5+ ta activity)
+        Object.entries(buckets).forEach(([bkey, count]) => {
+            const t = dayStart + parseInt(bkey) * bucketMs;
+            const pct = ((t - dayStart) / total) * 100;
+            if (pct < 0 || pct > 100) return;
+            const dot = document.createElement('div');
+            dot.className = 'tl-activity-dot' + (count >= 5 ? ' hot' : '');
+            dot.style.left = pct + '%';
+            dot.title = `${new Date(t).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}: ${count} ta`;
+            cont.appendChild(dot);
+        });
+    }
+
+    // ===== TIMELINE — DRAG bilan boshqarish =====
+    let isDragging = false;
+
+    function timelineJump(clientX) {
         if (!dayStart || !dayEnd) return;
         const rect = tlSlider.getBoundingClientRect();
-        const pct = (e.clientX - rect.left) / rect.width;
+        const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
         setPlaybackTime(dayStart + pct * (dayEnd - dayStart), true);
+    }
+
+    tlSlider.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        tlMarker.classList.add('dragging');
+        playing = false;
+        const p = document.getElementById('btnPlay');
+        p.textContent = '▶ Davom';
+        timelineJump(e.clientX);
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        timelineJump(e.clientX);
+    });
+    document.addEventListener('mouseup', function() {
+        if (isDragging) {
+            isDragging = false;
+            tlMarker.classList.remove('dragging');
+        }
+    });
+    // Touch (mobile) uchun ham
+    tlSlider.addEventListener('touchstart', function(e) {
+        if (!e.touches.length) return;
+        isDragging = true;
+        tlMarker.classList.add('dragging');
+        playing = false;
+        const p = document.getElementById('btnPlay');
+        p.textContent = '▶ Davom';
+        timelineJump(e.touches[0].clientX);
+    }, { passive: true });
+    document.addEventListener('touchmove', function(e) {
+        if (!isDragging || !e.touches.length) return;
+        timelineJump(e.touches[0].clientX);
+    }, { passive: true });
+    document.addEventListener('touchend', function() {
+        if (isDragging) { isDragging = false; tlMarker.classList.remove('dragging'); }
     });
 
     document.getElementById('btnPlay').addEventListener('click', function() {
@@ -697,6 +843,7 @@
                 renderArcs();
 
                 renderTopTables(data.top_domains || [], data.top_countries || []);
+                renderActivityMarkers();
 
                 document.getElementById('loadingOverlay').classList.add('hide');
             })
@@ -704,6 +851,90 @@
                 document.getElementById('loadingSub').textContent = 'Xatolik: ' + err.message;
             });
     }
+
+    // ===== FULLSCREEN =====
+    const globeCard = document.querySelector('.globe-card');
+    const btnFs = document.getElementById('btnFullscreen');
+    btnFs.addEventListener('click', function() {
+        if (!document.fullscreenElement) {
+            (globeCard.requestFullscreen || globeCard.webkitRequestFullscreen || function(){}).call(globeCard);
+        } else {
+            (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
+        }
+    });
+    document.addEventListener('fullscreenchange', function() {
+        const inFs = !!document.fullscreenElement;
+        btnFs.innerHTML = inFs
+            ? '<i class="zmdi zmdi-fullscreen-exit"></i><span class="fs-label">Chiqish</span>'
+            : '<i class="zmdi zmdi-fullscreen"></i><span class="fs-label">To\'liq ekran</span>';
+        setTimeout(resizeGlobe, 100);
+    });
+
+    // ===== LEAFLET MAP MODAL — Google Maps ga o'xshash chuqur zoom =====
+    let leafletMap = null;
+    let leafletMarker = null;
+
+    window.openMapForDestination = function(activity) {
+        const modal = document.getElementById('mapModal');
+        document.getElementById('mapModalTitle').textContent = activity.domain;
+        document.getElementById('mapModalSub').textContent =
+            `${activity.geo.country || ''}${activity.geo.city ? ' · ' + activity.geo.city : ''} · IP: ${activity.geo.ip || '—'}`;
+        modal.classList.add('show');
+
+        setTimeout(() => {
+            if (!leafletMap) {
+                leafletMap = L.map('leafletMap', {
+                    minZoom: 2, maxZoom: 19, zoomControl: true, worldCopyJump: true,
+                }).setView([activity.geo.lat, activity.geo.lng], 12);
+
+                // Esri World Imagery — token'siz, uy darajasigacha zoom
+                L.tileLayer(
+                    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                    {
+                        attribution: 'Tiles &copy; Esri', maxZoom: 19,
+                    }
+                ).addTo(leafletMap);
+                // Yorliqlar qatlami (yo'l va shahar nomlari)
+                L.tileLayer(
+                    'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+                    { maxZoom: 19, opacity: 0.9 }
+                ).addTo(leafletMap);
+            } else {
+                leafletMap.setView([activity.geo.lat, activity.geo.lng], 12);
+            }
+            if (leafletMarker) leafletMap.removeLayer(leafletMarker);
+            leafletMarker = L.marker([activity.geo.lat, activity.geo.lng])
+                .addTo(leafletMap)
+                .bindPopup(`<b>${activity.domain}</b><br>${activity.geo.city || ''} ${activity.geo.country || ''}<br>IP: ${activity.geo.ip}`)
+                .openPopup();
+
+            // Origin nuqtasidan destinationgacha chiziq
+            L.polyline([[ORIGIN.lat, ORIGIN.lng], [activity.geo.lat, activity.geo.lng]], {
+                color: '#4dabf7', weight: 2, opacity: 0.6, dashArray: '6,6'
+            }).addTo(leafletMap);
+            L.circleMarker([ORIGIN.lat, ORIGIN.lng], {
+                radius: 6, fillColor: '#4dabf7', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.9
+            }).addTo(leafletMap).bindTooltip('Server');
+
+            leafletMap.invalidateSize();
+        }, 100);
+    };
+
+    window.closeMapModal = function() {
+        document.getElementById('mapModal').classList.remove('show');
+    };
+
+    // Detail paneldagi "Batafsil xarita" tugmasi
+    document.getElementById('btnOpenMap').addEventListener('click', function() {
+        if (window.__CURRENT_DETAIL) window.openMapForDestination(window.__CURRENT_DETAIL);
+    });
+
+    // openDetail'ga current activity ni saqlab qo'yamiz
+    const _oldOpenDetail = window.openDetail;
+    window.openDetail = function(a) {
+        window.__CURRENT_DETAIL = a;
+        _oldOpenDetail(a);
+    };
 
     const dateInput = document.getElementById('dateInput');
     const today = new Date();
