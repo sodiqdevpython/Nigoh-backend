@@ -22,7 +22,8 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
-
+migrations/
+media/
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

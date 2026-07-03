@@ -27,6 +27,9 @@ urlpatterns = [
     path('device/<str:pk>/screenshot-request/', v.request_screenshot_view, name='request_screenshot'),
     path('device/<str:pk>/screenshot-poll/<uuid:req_id>/', v.poll_screenshot_view, name='poll_screenshot'),
 
+    # App icons — dastur logotiplari JSON (DB dagi)
+    path('app-icons.json', v.app_icons_json, name='app_icons_json'),
+
     # Broadcast (screen share)
     path('broadcast/start/', v.broadcast_start_view, name='broadcast_start'),
     path('broadcast/agent-url/<uuid:session_id>/', v.broadcast_agent_url_view, name='broadcast_agent_url'),

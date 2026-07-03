@@ -313,3 +313,43 @@ class BroadcastSession(BaseModel):
     def __str__(self):
         return f"Broadcast: {self.input_computer.hostname} → {self.output_computers.count()} outputs"
 
+
+# ============================================================
+# APP ICON — dastur nomiga logotip biriktirish
+# Frontend Ilovalar statistikasi va Faollik tarixi jadvallarida
+# hamda chartda ishlatiladi. Agar DB da mavjud bo'lmasa — JS
+# ichidagi kod mashhur ilovalar uchun avtomatik chiqaradi.
+# ============================================================
+
+def _app_icon_upload_path(instance, filename):
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'png'
+    safe = ''.join(c for c in instance.name.lower() if c.isalnum() or c in '-_')[:40] or 'icon'
+    return f"app_icons/{safe}.{ext}"
+
+
+class AppIcon(BaseModel):
+    """Admin panel orqali qo'lda qo'shiladigan dastur logotiplari."""
+    name = models.CharField(
+        max_length=100, unique=True, db_index=True,
+        help_text="Dastur nomi (.exe qo'shish shart emas). Masalan: chrome, telegram, msedge"
+    )
+    icon = models.ImageField(
+        upload_to=_app_icon_upload_path,
+        help_text="PNG/JPG/SVG rasmni yuklang"
+    )
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = "Dastur logotipi"
+        verbose_name_plural = "Dastur logotiplari"
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        # Nomni oddiy ko'rinishga keltiramiz — lowercase, .exe olib tashlanadi
+        if self.name:
+            self.name = self.name.strip().lower()
+            if self.name.endswith('.exe'):
+                self.name = self.name[:-4]
+        super().save(*args, **kwargs)

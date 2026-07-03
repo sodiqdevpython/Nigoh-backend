@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     BlockedURL, BlockedAttemptLog, ActivityLog, BlockedProcess, ProcessAlertLog,
     AppUsageStatistic, ScreenShareSession, RemoteControlSession,
-    ScreenshotRequest, BroadcastSession
+    ScreenshotRequest, BroadcastSession, AppIcon
 )
 from django.utils.html import format_html
 import hashlib
@@ -246,4 +246,33 @@ class RemoteControlSessionAdmin(admin.ModelAdmin):
         return "Kutilmoqda..."
     
     remote_link.short_description = 'Boshqaruv Havolasi'
+
+
+# ============================================================
+# APP ICON — dastur logotiplarini qo'lda boshqarish
+# ============================================================
+@admin.register(AppIcon)
+class AppIconAdmin(admin.ModelAdmin):
+    list_display = ('name', 'preview', 'created_at')
+    search_fields = ('name',)
+    readonly_fields = ('preview_large', 'created_at', 'updated_at')
+    fields = ('name', 'icon', 'preview_large', 'created_at', 'updated_at')
+
+    def preview(self, obj):
+        if obj.icon:
+            return format_html(
+                '<img src="{}" style="width:24px;height:24px;object-fit:contain;background:rgba(0,0,0,0.05);border-radius:4px;padding:2px;">',
+                obj.icon.url,
+            )
+        return '—'
+    preview.short_description = 'Logo'
+
+    def preview_large(self, obj):
+        if obj.icon:
+            return format_html(
+                '<img src="{}" style="width:96px;height:96px;object-fit:contain;background:rgba(0,0,0,0.05);border-radius:8px;padding:6px;">',
+                obj.icon.url,
+            )
+        return '—'
+    preview_large.short_description = 'Ko\'rinishi'
 

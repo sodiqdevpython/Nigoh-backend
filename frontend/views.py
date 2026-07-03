@@ -16,7 +16,7 @@ from django.contrib.auth.decorators import login_required
 from tracking.models import (
     AppUsageStatistic, ActivityLog, BlockedAttemptLog, ProcessAlertLog,
     ScreenShareSession, BlockedURL, BlockedProcess,
-    ScreenshotRequest, BroadcastSession
+    ScreenshotRequest, BroadcastSession, AppIcon
 )
 from endpoints.consumers import LIVE_METRICS
 import json
@@ -938,3 +938,13 @@ def blocked_processes_view(request):
         'top_blocked': top_blocked,
         'match_choices': BlockedProcess.MATCH_CHOICES,
     })
+
+
+@login_required
+def app_icons_json(request):
+    """DB dagi barcha dastur logotiplari — device_detail sahifasi tomonidan
+    fetch qilinadi. Format: {"chrome": "/media/app_icons/chrome.png", ...}"""
+    icons = {a.name: a.icon.url for a in AppIcon.objects.all() if a.icon}
+    resp = JsonResponse({'icons': icons})
+    resp['Cache-Control'] = 'public, max-age=60'
+    return resp

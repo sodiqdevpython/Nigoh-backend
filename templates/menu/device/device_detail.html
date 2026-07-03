@@ -44,21 +44,29 @@
     .nav-tabs-glass .nav-link:hover { color: #ffffff; border-color: rgba(255, 255, 255, 0.3); }
     .nav-tabs-glass .nav-link.active { color: #ffffff; border-color: #ffffff; text-shadow: 0px 1px 4px rgba(0, 0, 0, 0.9); }
 
-    /* Hero screenshot */
+    /* Hero screenshot — kengroq va balandroq, qora bo'shliq minimum */
     .screenshot-hero {
         position: relative;
         border-radius: 10px;
         overflow: hidden;
-        background: rgba(0, 0, 0, 0.55);
+        background: #0a0a0f;
         border: 1px solid rgba(255, 255, 255, 0.12);
-        min-height: 260px;
+        width: 100%;
+        aspect-ratio: 16 / 9;   /* Windows ekran nisbatiga mos */
+        max-height: 78vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
     .screenshot-hero img {
         display: block;
         width: 100%;
-        max-height: 480px;
+        height: 100%;
         object-fit: contain;
-        background: #0a0a0f;
+    }
+    @supports not (aspect-ratio: 16 / 9) {
+        /* Eski brauzerlar uchun fallback */
+        .screenshot-hero { min-height: 60vh; }
     }
     .screenshot-hero .hero-meta {
         position: absolute;
@@ -228,6 +236,21 @@
         <script>
         // Sahifa ochilganda avtomatik screenshot so'rovi (fon rejimida)
         (function() {
+            const heroEl = document.getElementById('heroScreenshot');
+            const hasExisting = !!document.getElementById('heroImg');
+
+            function showTimeout() {
+                // Eskisi bor bo'lsa spinner ni to'xtatish shart emas — u yerda rasm turibdi
+                if (hasExisting) return;
+                if (!heroEl) return;
+                heroEl.innerHTML =
+                    '<div class="hero-loading">' +
+                        '<i class="zmdi zmdi-time-off" style="font-size:56px;color:#4a4f5c;"></i>' +
+                        '<h6 class="text-muted mt-3 mb-0">Agent javob bermadi</h6>' +
+                        '<p class="text-muted small mb-0">Keyinroq qayta yuklab ko\'ring</p>' +
+                    '</div>';
+            }
+
             fetch("{% url 'request_screenshot' computer.id %}", {
                 method: 'POST',
                 headers: {
@@ -237,31 +260,36 @@
             })
             .then(r => r.json())
             .then(data => {
-                if (data.error || !data.request_id) return;
+                if (data.error || !data.request_id) { showTimeout(); return; }
                 const rid = data.request_id;
                 let attempts = 0;
+                const MAX = 12;   // 12 * 1.5s = 18 sekund
                 const t = setInterval(function() {
                     attempts++;
-                    if (attempts > 20) { clearInterval(t); return; }
+                    if (attempts > MAX) {
+                        clearInterval(t);
+                        showTimeout();
+                        return;
+                    }
                     fetch(`/device/{{ computer.id }}/screenshot-poll/${rid}/`)
                         .then(r => r.json())
                         .then(pd => {
                             if (pd.status === 'COMPLETED' && pd.image_url) {
                                 clearInterval(t);
-                                const hero = document.getElementById('heroScreenshot');
                                 const bust = '?t=' + Date.now();
-                                hero.innerHTML =
+                                heroEl.innerHTML =
                                     '<img id="heroImg" src="' + pd.image_url + bust + '" alt="Eng oxirgi ekran">' +
                                     '<div class="hero-meta"><span class="hero-dot"></span> ' +
                                     'Yangi <span id="heroTime">' + new Date().toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'}) + '</span></div>';
                             } else if (pd.status === 'FAILED') {
                                 clearInterval(t);
+                                showTimeout();
                             }
                         })
                         .catch(() => {});
                 }, 1500);
             })
-            .catch(() => {});
+            .catch(() => showTimeout());
         })();
         </script>
         {% endif %}
@@ -781,9 +809,10 @@
                                     },
                                     options: {
                                         responsive: true,
-                                        scales: { 
+                                        layout: { padding: { top: 30 } },  // icon lar uchun joy
+                                        scales: {
                                             y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#ccc' } },
-                                            x: { grid: { display: false }, ticks: { color: '#ccc' } } 
+                                            x: { grid: { display: false }, ticks: { color: '#ccc' } }
                                         },
                                         plugins: { legend: { labels: { color: '#fff' } } }
                                     }
@@ -881,9 +910,10 @@
                                     },
                                     options: {
                                         responsive: true,
-                                        scales: { 
+                                        layout: { padding: { top: 30 } },
+                                        scales: {
                                             y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#ccc' } },
-                                            x: { grid: { display: false }, ticks: { color: '#ccc' } } 
+                                            x: { grid: { display: false }, ticks: { color: '#ccc' } }
                                         },
                                         plugins: { legend: { labels: { color: '#fff' } } }
                                     }
@@ -1482,16 +1512,13 @@
 </script>
 {% csrf_token %}
 
-{# ============================================================
-   APP ICONS — mashhur ilovalar uchun kichik logotiplar
-   Simple Icons CDN + fallback ni birlashtiradi. Chart labellariga ham
-   ta'sir qiladi (Chart.js plugin orqali emas — text prefix bilan).
-   ============================================================ #}
 <script>
+// ============================================================
+// APP ICONS — DB + JS map birga ishlaydi (DB afzal)
+// ============================================================
 (function() {
-    // Kalitlar: app_name lowercase + `.exe` yo'q qilingan
-    // Qiymatlar: {slug, color}
-    // slug — Simple Icons dan (https://simpleicons.org/)
+    // ---- 1) JS xarita (mashhur ilovalar uchun avtomatik) ----
+    // Kalitlar: app_name lowercase + `.exe` olib tashlangan
     const APP_ICONS = {
         // Brauzerlar
         'chrome':        {slug:'googlechrome',   color:'4285F4'},
@@ -1572,22 +1599,155 @@
         return null;
     }
 
-    // DOM icon chip larni yangilash
-    document.querySelectorAll('.app-chip[data-app-name]').forEach(chip => {
-        const info = iconFor(chip.dataset.appName);
-        if (!info) return;
-        const ico = chip.querySelector('.app-ico');
-        if (!ico) return;
-        const img = document.createElement('img');
-        img.src = iconUrl(info.slug, info.color);
-        img.alt = '';
-        img.style.filter = 'brightness(0) invert(1)';   // oq rangga aylantiramiz
-        img.onerror = () => { img.remove(); };
-        ico.innerHTML = '';
-        ico.style.background = '#' + info.color + '33';   // shaffof taxminiy fon
-        ico.style.borderColor = '#' + info.color + '66';
-        ico.appendChild(img);
-    });
+    // ---- 2) Umumiy resolver — DB > JS xarita > null ----
+    // window.__APP_ICON_DB — {name: url} DB dan fetch qilingandan keyin to'ldiriladi
+    window.__APP_ICON_DB = window.__APP_ICON_DB || {};
+    window.__APP_ICON_CACHE = window.__APP_ICON_CACHE || {};   // Image obyektlari (chart uchun)
+
+    /**
+     * Berilgan app_name uchun {url, color} qaytaradi yoki null.
+     * DB da mavjud bo'lsa — u afzal, aks holda JS xarita.
+     */
+    window.resolveAppIcon = function(name) {
+        const key = normalize(name);
+        if (!key) return null;
+        if (window.__APP_ICON_DB[key]) {
+            return { url: window.__APP_ICON_DB[key], color: '888888', fromDb: true };
+        }
+        const info = iconFor(name);
+        if (info) return { url: iconUrl(info.slug, info.color), color: info.color, fromDb: false };
+        return null;
+    };
+
+    // DOM chip larni yangilash
+    function paintChips() {
+        document.querySelectorAll('.app-chip[data-app-name]').forEach(chip => {
+            const res = window.resolveAppIcon(chip.dataset.appName);
+            const ico = chip.querySelector('.app-ico');
+            if (!res || !ico) return;
+            const img = document.createElement('img');
+            img.src = res.url;
+            img.alt = '';
+            // DB dan kelgan bo'lsa o'z rangida qoladi, JS map dan bo'lsa oq rangga
+            if (!res.fromDb) img.style.filter = 'brightness(0) invert(1)';
+            img.onerror = () => { img.remove(); };
+            ico.innerHTML = '';
+            ico.style.background = '#' + res.color + '33';
+            ico.style.borderColor = '#' + res.color + '66';
+            ico.appendChild(img);
+        });
+    }
+
+    // Preload Image obyektlarini chart uchun
+    function preloadIconsFor(labels) {
+        return Promise.all((labels || []).map(name => {
+            const res = window.resolveAppIcon(name);
+            if (!res) return Promise.resolve(null);
+            if (window.__APP_ICON_CACHE[res.url]) return Promise.resolve(window.__APP_ICON_CACHE[res.url]);
+            return new Promise(resolve => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    window.__APP_ICON_CACHE[res.url] = { img, fromDb: res.fromDb };
+                    resolve(window.__APP_ICON_CACHE[res.url]);
+                };
+                img.onerror = () => resolve(null);
+                img.src = res.url;
+            });
+        }));
+    }
+    window.preloadIconsFor = preloadIconsFor;
+
+    // Chart.js plugin: har bar tepasiga icon chizadi
+    window.iconOnBarPlugin = {
+        id: 'iconOnBar',
+        afterDatasetsDraw(chart) {
+            const ctx = chart.ctx;
+            const meta = chart.getDatasetMeta(0);
+            if (!meta || !meta.data) return;
+            const labels = chart.data.labels || [];
+            meta.data.forEach((bar, i) => {
+                const name = labels[i];
+                const res = window.resolveAppIcon(name);
+                if (!res) return;
+                const cache = window.__APP_ICON_CACHE[res.url];
+                if (!cache || !cache.img) return;
+                const size = 22;
+                const x = bar.x - size / 2;
+                const y = bar.y - size - 4;
+                // Ozgina orqa fon
+                ctx.save();
+                ctx.fillStyle = 'rgba(255,255,255,0.08)';
+                ctx.strokeStyle = '#' + res.color + '66';
+                ctx.lineWidth = 1;
+                const r = 4;
+                ctx.beginPath();
+                ctx.moveTo(x + r, y);
+                ctx.lineTo(x + size - r, y);
+                ctx.quadraticCurveTo(x + size, y, x + size, y + r);
+                ctx.lineTo(x + size, y + size - r);
+                ctx.quadraticCurveTo(x + size, y + size, x + size - r, y + size);
+                ctx.lineTo(x + r, y + size);
+                ctx.quadraticCurveTo(x, y + size, x, y + size - r);
+                ctx.lineTo(x, y + r);
+                ctx.quadraticCurveTo(x, y, x + r, y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // DB dan bo'lsa asl rangda, JS map dan bo'lsa oq rangga aylantiramiz
+                if (!cache.fromDb) {
+                    // Rasm oq rangga chiqishi uchun offscreen canvas trick
+                    const off = document.createElement('canvas');
+                    off.width = size - 4; off.height = size - 4;
+                    const octx = off.getContext('2d');
+                    octx.drawImage(cache.img, 0, 0, off.width, off.height);
+                    octx.globalCompositeOperation = 'source-in';
+                    octx.fillStyle = '#ffffff';
+                    octx.fillRect(0, 0, off.width, off.height);
+                    ctx.drawImage(off, x + 2, y + 2);
+                } else {
+                    ctx.drawImage(cache.img, x + 2, y + 2, size - 4, size - 4);
+                }
+                ctx.restore();
+            });
+        }
+    };
+
+    // Chart.js allaqachon yuklangan bo'lsa plugin ni ro'yxatga olamiz
+    function registerChartPlugin() {
+        if (typeof Chart !== 'undefined' && Chart.register && !window.__ICON_PLUGIN_REG) {
+            Chart.register(window.iconOnBarPlugin);
+            window.__ICON_PLUGIN_REG = true;
+        }
+    }
+
+    // ---- 3) DB dan icons ni fetch qilib chipslarni qayta bo'yaymiz ----
+    fetch("{% url 'app_icons_json' %}")
+        .then(r => r.ok ? r.json() : {icons: {}})
+        .then(data => {
+            const icons = (data && data.icons) || {};
+            Object.keys(icons).forEach(k => {
+                window.__APP_ICON_DB[normalize(k)] = icons[k];
+            });
+        })
+        .catch(() => {})
+        .finally(() => {
+            paintChips();
+            registerChartPlugin();
+            // Chart labellarini preload qilib refresh qilamiz
+            const allLabels = [];
+            try { allLabels.push(...({{ app_chart_labels|safe|default:"[]" }})); } catch(e) {}
+            try { allLabels.push(...({{ act_chart_labels|safe|default:"[]" }})); } catch(e) {}
+            if (allLabels.length) {
+                preloadIconsFor(allLabels).then(() => {
+                    Object.values(Chart?.instances || {}).forEach(c => c.update());
+                });
+            }
+        });
+
+    // Dastlab (fetch tugashini kutmasdan) JS xaritadan chizib qo'yamiz
+    paintChips();
 })();
 </script>
 
