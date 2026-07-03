@@ -967,77 +967,87 @@ def external_connections_data_json(request):
 
     Query params:
         date=YYYY-MM-DD   — kun (default: bugun)
-
-    Response:
-        {
-            "date":   "2026-07-03",
-            "origin": {lat, lng, label},
-            "arcs":   [{id, computer, hostname, url, domain, app, title,
-                        duration, kb, mouse, ts, geo: {ip, lat, lng, ...}}, ...]
-        }
     """
-    from tracking.geo import extract_domain, resolve_domains_bulk
+    import traceback
+    try:
+        from tracking.geo import extract_domain, resolve_domains_bulk
 
-    date_str = request.GET.get('date', '').strip()
-    if date_str:
+        date_str = request.GET.get('date', '').strip()
+        if date_str:
+            try:
+                day = datetime.strptime(date_str, '%Y-%m-%d')
+            except ValueError:
+                day = timezone.localtime().date()
+                day = datetime(day.year, day.month, day.day)
+        else:
+            now = timezone.localtime()
+            day = datetime(now.year, now.month, now.day)
+
+        start = timezone.make_aware(day)
+        end   = start + timedelta(days=1)
+
+        qs = (ActivityLog.objects
+              .filter(created_at__gte=start, created_at__lt=end)
+              .exclude(url__isnull=True).exclude(url='')
+              .select_related('computer')
+              .order_by('created_at')[:400])
+
+        activities = list(qs)
+
+        domain_map = {}
+        for a in activities:
+            try:
+                d = extract_domain(a.url)
+            except Exception:
+                d = None
+            if d:
+                domain_map[a.id] = d
+
+        unique_domains = list(set(domain_map.values()))
         try:
-            day = datetime.strptime(date_str, '%Y-%m-%d')
-        except ValueError:
-            day = timezone.localtime().date()
-            day = datetime(day.year, day.month, day.day)
-    else:
-        now = timezone.localtime()
-        day = datetime(now.year, now.month, now.day)
+            geo_map = resolve_domains_bulk(unique_domains, max_new=15)
+        except Exception as e:
+            print(f"[external_connections geo bulk xato] {e}")
+            traceback.print_exc()
+            geo_map = {}
 
-    start = timezone.make_aware(day)
-    end   = start + timedelta(days=1)
+        arcs = []
+        for a in activities:
+            d = domain_map.get(a.id)
+            if not d:
+                continue
+            geo = geo_map.get(d)
+            if not geo:
+                continue
+            arcs.append({
+                'id':          str(a.id),
+                'computer_id': str(a.computer.id) if a.computer else '',
+                'hostname':    (a.computer.hostname if a.computer else None) or 'Unknown',
+                'url':         a.url,
+                'domain':      d,
+                'app':         a.app_name or '',
+                'title':       a.title or '',
+                'duration':    a.duration_seconds or 0,
+                'ts':          a.created_at.isoformat(),
+                'geo':         geo,
+            })
 
-    # URL bo'lgan activity larni olib kelamiz (limit — serverga og'ir tushmasin)
-    qs = (ActivityLog.objects
-          .filter(created_at__gte=start, created_at__lt=end)
-          .exclude(url__isnull=True).exclude(url='')
-          .select_related('computer')
-          .order_by('created_at')[:400])
-
-    activities = list(qs)
-
-    # Domenlarni ajratamiz va toplu ravishda geo hal qilamiz
-    domain_map = {}
-    for a in activities:
-        d = extract_domain(a.url)
-        if d:
-            domain_map[a.id] = d
-
-    unique_domains = list(set(domain_map.values()))
-    geo_map = resolve_domains_bulk(unique_domains, max_new=15)
-
-    arcs = []
-    for a in activities:
-        d = domain_map.get(a.id)
-        if not d:
-            continue
-        geo = geo_map.get(d)
-        if not geo:
-            continue
-        arcs.append({
-            'id':       str(a.id),
-            'computer_id': str(a.computer.id),
-            'hostname': a.computer.hostname or 'Unknown',
-            'url':      a.url,
-            'domain':   d,
-            'app':      a.app_name,
-            'title':    a.title or '',
-            'duration': a.duration_seconds,
-            'ts':       a.created_at.isoformat(),
-            'geo':      geo,
+        return JsonResponse({
+            'date':   day.strftime('%Y-%m-%d'),
+            'origin': SERVER_ORIGIN,
+            'arcs':   arcs,
+            'total':  len(arcs),
         })
-
-    return JsonResponse({
-        'date':   day.strftime('%Y-%m-%d'),
-        'origin': SERVER_ORIGIN,
-        'arcs':   arcs,
-        'total':  len(arcs),
-    })
+    except Exception as e:
+        print(f"[external_connections_data_json xato] {e}")
+        traceback.print_exc()
+        return JsonResponse({
+            'error': str(e),
+            'trace': traceback.format_exc(),
+            'origin': SERVER_ORIGIN,
+            'arcs': [],
+            'date': '',
+        }, status=500)
 
 
 @login_required

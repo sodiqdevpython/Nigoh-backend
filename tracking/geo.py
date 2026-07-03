@@ -14,7 +14,11 @@ Foydalanish:
 import socket
 from urllib.parse import urlparse
 
-import requests
+try:
+    import requests
+except ImportError:
+    requests = None    # requirements.txt ga qo'shildi lekin agar hali o'rnatilmagan bo'lsa
+
 from django.utils import timezone
 
 from .models import URLGeoCache
@@ -57,6 +61,9 @@ def _dns_lookup(domain):
 
 def _geo_lookup(ip):
     """IP -> geo dict. ip-api.com bepul tarifi (45 req/min)."""
+    if requests is None:
+        print("[geo_lookup] requests paketi o'rnatilmagan — pip install requests")
+        return None
     try:
         r = requests.get(IP_API_URL.format(ip=ip), timeout=4)
         if r.status_code != 200:
