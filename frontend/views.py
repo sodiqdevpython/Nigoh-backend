@@ -962,13 +962,9 @@ def external_connections_view(request):
 
 @login_required
 def external_connections_data_json(request):
-    """
-    JSON: bir kunlik ActivityLog + geo cache.
-
-    Query params:
-        date=YYYY-MM-DD   — kun (default: bugun)
-    """
+    """JSON: bir kunlik ActivityLog + geo + PC lokatsiya + statistika."""
     import traceback
+    from collections import Counter
     try:
         from tracking.geo import extract_domain, resolve_domains_bulk
 
@@ -986,14 +982,23 @@ def external_connections_data_json(request):
         start = timezone.make_aware(day)
         end   = start + timedelta(days=1)
 
-        qs = (ActivityLog.objects
-              .filter(created_at__gte=start, created_at__lt=end)
-              .exclude(url__isnull=True).exclude(url='')
-              .select_related('computer')
-              .order_by('created_at')[:400])
+        def _build_qs(range_start, range_end, limit=400):
+            return (ActivityLog.objects
+                    .filter(created_at__gte=range_start, created_at__lt=range_end)
+                    .exclude(url__isnull=True).exclude(url='')
+                    .select_related('computer', 'computer__group')
+                    .order_by('created_at')[:limit])
 
-        activities = list(qs)
+        activities = list(_build_qs(start, end))
+        fallback_used = False
 
+        # Bugun uchun ma'lumot bo'lmasa — oxirgi 30 kundan olib beramiz (max 20 ta)
+        if not activities:
+            fallback_start = end - timedelta(days=30)
+            activities = list(_build_qs(fallback_start, end, limit=20))
+            fallback_used = True
+
+        # Domain'larni ajratamiz va toplu ravishda geo hal qilamiz
         domain_map = {}
         for a in activities:
             try:
@@ -1011,6 +1016,50 @@ def external_connections_data_json(request):
             traceback.print_exc()
             geo_map = {}
 
+        # Kompyuter -> AppUsageStatistic (keyboard/mouse) toplu ravishda
+        # (bugungi kun uchun)
+        comp_app_pairs = set(
+            (a.computer_id, (a.app_name or '').lower())
+            for a in activities if a.computer_id
+        )
+        usage_map = {}
+        if comp_app_pairs:
+            comp_ids = list({p[0] for p in comp_app_pairs})
+            usage_qs = AppUsageStatistic.objects.filter(
+                computer_id__in=comp_ids,
+                created_at__gte=start, created_at__lt=end,
+            ).values('computer_id', 'app_name',
+                     'keyboard_active_seconds', 'mouse_active_seconds',
+                     'total_open_seconds', 'active_seconds', 'full_path')
+            for u in usage_qs:
+                k = (u['computer_id'], (u['app_name'] or '').lower())
+                # Agar bir app_name uchun bir necha yozuv bo'lsa — jamlaymiz
+                slot = usage_map.setdefault(k, {
+                    'keyboard': 0, 'mouse': 0,
+                    'total_open': 0, 'active': 0, 'full_path': ''
+                })
+                slot['keyboard']   += u['keyboard_active_seconds'] or 0
+                slot['mouse']      += u['mouse_active_seconds'] or 0
+                slot['total_open'] += u['total_open_seconds'] or 0
+                slot['active']     += u['active_seconds'] or 0
+                if u['full_path'] and not slot['full_path']:
+                    slot['full_path'] = u['full_path']
+
+        def _location(computer):
+            if not computer:
+                return None
+            g = computer.group
+            if not g:
+                return None
+            try:
+                bldg = g.get_building_display() or ''
+                floor = g.get_floor_display() or ''
+                room = g.room_number or ''
+                parts = [p for p in [bldg, floor, room and f"{room}-xona"] if p]
+                return ' · '.join(parts) if parts else None
+            except Exception:
+                return None
+
         arcs = []
         for a in activities:
             d = domain_map.get(a.id)
@@ -1019,24 +1068,52 @@ def external_connections_data_json(request):
             geo = geo_map.get(d)
             if not geo:
                 continue
+            usage = usage_map.get((a.computer_id, (a.app_name or '').lower()), {})
             arcs.append({
                 'id':          str(a.id),
                 'computer_id': str(a.computer.id) if a.computer else '',
                 'hostname':    (a.computer.hostname if a.computer else None) or 'Unknown',
+                'location':    _location(a.computer),
+                'group_name':  a.computer.group.name if (a.computer and a.computer.group) else None,
                 'url':         a.url,
                 'domain':      d,
                 'app':         a.app_name or '',
                 'title':       a.title or '',
                 'duration':    a.duration_seconds or 0,
+                'kb_seconds':  usage.get('keyboard', 0),
+                'mouse_seconds': usage.get('mouse', 0),
+                'app_active_seconds': usage.get('active', 0),
                 'ts':          a.created_at.isoformat(),
                 'geo':         geo,
             })
 
+        # ===== TOP 10 statistikalari =====
+        domain_counter = Counter()
+        country_counter = Counter()
+        for arc in arcs:
+            domain_counter[arc['domain']] += 1
+            if arc['geo'].get('country'):
+                country_counter[arc['geo']['country']] += 1
+
+        top_domains = [
+            {'domain': d, 'count': c,
+             'flag_code': next((a['geo'].get('country_code','') for a in arcs if a['domain']==d), '')}
+            for d, c in domain_counter.most_common(10)
+        ]
+        top_countries = [
+            {'country': ctr, 'count': c,
+             'flag_code': next((a['geo'].get('country_code','') for a in arcs if a['geo'].get('country')==ctr), '')}
+            for ctr, c in country_counter.most_common(10)
+        ]
+
         return JsonResponse({
-            'date':   day.strftime('%Y-%m-%d'),
-            'origin': SERVER_ORIGIN,
-            'arcs':   arcs,
-            'total':  len(arcs),
+            'date':          day.strftime('%Y-%m-%d'),
+            'origin':        SERVER_ORIGIN,
+            'arcs':          arcs,
+            'total':         len(arcs),
+            'fallback_used': fallback_used,
+            'top_domains':   top_domains,
+            'top_countries': top_countries,
         })
     except Exception as e:
         print(f"[external_connections_data_json xato] {e}")
@@ -1045,7 +1122,7 @@ def external_connections_data_json(request):
             'error': str(e),
             'trace': traceback.format_exc(),
             'origin': SERVER_ORIGIN,
-            'arcs': [],
+            'arcs': [], 'top_domains': [], 'top_countries': [],
             'date': '',
         }, status=500)
 
