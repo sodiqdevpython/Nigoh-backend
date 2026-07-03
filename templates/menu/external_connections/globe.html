@@ -317,10 +317,27 @@
     </div>
 </div>
 
-<script src="https://unpkg.com/three@0.152.0/build/three.min.js"></script>
-<script src="https://unpkg.com/globe.gl@2.32.0/dist/globe.gl.min.js"></script>
+<!-- globe.gl o'zi ichida three.js ni bundle qilib beradi — alohida three.js kerak emas.
+     jsdelivr Edge Tracking Prevention tomonidan bloklanmaydi. -->
+<script src="https://cdn.jsdelivr.net/npm/globe.gl@2.32.0/dist/globe.gl.min.js"
+        onerror="window.__GLOBE_LOAD_ERR=1"></script>
 <script>
 (function() {
+    // ==============================================================
+    // Kutubxona yuklanmagan bo'lsa — foydalanuvchiga aniq xabar
+    // ==============================================================
+    if (typeof Globe === 'undefined' || window.__GLOBE_LOAD_ERR) {
+        const ov = document.getElementById('loadingOverlay');
+        if (ov) {
+            ov.innerHTML =
+                '<i class="zmdi zmdi-alert-triangle" style="font-size:56px;color:#ff9800;"></i>' +
+                '<h6 class="mt-3 text-white">Globus kutubxonasi yuklanmadi</h6>' +
+                '<p class="text-muted small">Brauzer CDN ga ruxsat bermayapti. ' +
+                'Edge da <b>Tracking Prevention</b> ni pasaytiring yoki Chrome/Firefox ochib ko\'ring.</p>';
+        }
+        return;
+    }
+
     const ORIGIN = {
         lat:   {{ origin.lat }},
         lng:   {{ origin.lng }},
