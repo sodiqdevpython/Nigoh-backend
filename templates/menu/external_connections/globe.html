@@ -1,4 +1,5 @@
 {% extends 'base/base.html' %}
+{% load l10n %}
 {% block content %}
 
 <style>
@@ -283,7 +284,11 @@
             </div>
 
             <!-- ===== GLOBE ===== -->
-            <div id="globeViz"></div>
+            <div id="globeViz"
+                 data-origin-lat="{{ origin.lat|unlocalize }}"
+                 data-origin-lng="{{ origin.lng|unlocalize }}"
+                 data-origin-label="{{ origin.label }}"
+                 data-json-url="{% url 'external_connections_data' %}"></div>
 
             <!-- ===== TIMELINE ===== -->
             <div class="timeline-wrap">
@@ -338,20 +343,21 @@
         return;
     }
 
-    const ORIGIN = {
-        lat:   {{ origin.lat }},
-        lng:   {{ origin.lng }},
-        label: "{{ origin.label }}"
-    };
-
     // ==============================================================
     // GLOBUS ni sozlash
     // ==============================================================
     const globeEl = document.getElementById('globeViz');
+    const DATA_URL = globeEl.dataset.jsonUrl;
+    const ORIGIN = {
+        lat:   parseFloat(globeEl.dataset.originLat),
+        lng:   parseFloat(globeEl.dataset.originLng),
+        label: globeEl.dataset.originLabel || 'Server'
+    };
+
     const globe = Globe()(globeEl)
         .backgroundColor('rgba(0,0,0,0)')
-        .globeImageUrl('https://unpkg.com/three-globe@2.31.0/example/img/earth-night.jpg')
-        .bumpImageUrl('https://unpkg.com/three-globe@2.31.0/example/img/earth-topology.png')
+        .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-night.jpg')
+        .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-topology.png')
         .showAtmosphere(true)
         .atmosphereColor('#4dabf7')
         .atmosphereAltitude(0.18)
@@ -633,7 +639,7 @@
         document.getElementById('loadingOverlay').classList.remove('hide');
         document.getElementById('loadingSub').textContent = 'IP → geo hal qilinmoqda...';
 
-        fetch(`{% url 'external_connections_data' %}?date=${dateStr}`)
+        fetch(DATA_URL + '?date=' + encodeURIComponent(dateStr))
             .then(r => r.json())
             .then(data => {
                 allActivities = data.arcs || [];
