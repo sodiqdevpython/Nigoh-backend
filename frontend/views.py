@@ -944,12 +944,26 @@ def blocked_processes_view(request):
 # TASHQARIGA CHIQISHLAR — 3D globus xaritada
 # ============================================================
 
-# Server manzili (chiqish nuqtasi) — barcha o'q lar shu yerdan boshlanadi
-SERVER_ORIGIN = {
-    'lat':   41.3746838,
-    'lng':   69.2673975,
-    'label': 'Server (Toshkent)',
+# Har bino uchun alohida chiqish nuqtasi. Building qiymatlari:
+# 1=A, 2=B, 3=C, 4=D (endpoints/choices.py dagi BuildingNumber ga mos)
+BUILDING_ORIGINS = {
+    1: {'lat': 41.375112, 'lng': 69.269483, 'label': 'A bino'},
+    2: {'lat': 41.374635, 'lng': 69.268619, 'label': 'B bino'},
+    3: {'lat': 41.374338, 'lng': 69.268166, 'label': 'C bino'},
+    4: {'lat': 41.373881, 'lng': 69.267422, 'label': 'D bino'},
 }
+# Guruhga biriktirilmagan yoki bino qiymati topilmagan PC'lar uchun default
+DEFAULT_ORIGIN = {'lat': 41.374688, 'lng': 69.269220, 'label': 'Boshqa'}
+
+# Sarlavha va marker uchun (frontend template'ga uzatiladi — asosiy markaz)
+SERVER_ORIGIN = {'lat': 41.374688, 'lng': 69.269220, 'label': 'Toshkent kampus'}
+
+
+def _origin_for_computer(computer):
+    """PC ning group.building qiymati bo'yicha chiqish nuqtasini qaytaradi."""
+    if computer and computer.group and computer.group.building:
+        return BUILDING_ORIGINS.get(computer.group.building, DEFAULT_ORIGIN)
+    return DEFAULT_ORIGIN
 
 
 @login_required
@@ -1075,12 +1089,14 @@ def external_connections_data_json(request):
             if not geo:
                 continue
             usage = usage_map.get((a.computer_id, _norm_app(a.app_name)), {})
+            origin = _origin_for_computer(a.computer)
             arcs.append({
                 'id':          str(a.id),
                 'computer_id': str(a.computer.id) if a.computer else '',
                 'hostname':    (a.computer.hostname if a.computer else None) or 'Unknown',
                 'location':    _location(a.computer),
                 'group_name':  a.computer.group.name if (a.computer and a.computer.group) else None,
+                'origin':      origin,     # ushbu PC uchun chiqish nuqtasi (bino bo'yicha)
                 'url':         a.url,
                 'domain':      d,
                 'app':         a.app_name or '',
@@ -1115,6 +1131,7 @@ def external_connections_data_json(request):
         return JsonResponse({
             'date':          day.strftime('%Y-%m-%d'),
             'origin':        SERVER_ORIGIN,
+            'origins':       list(BUILDING_ORIGINS.values()) + [DEFAULT_ORIGIN],
             'arcs':          arcs,
             'total':         len(arcs),
             'fallback_used': fallback_used,

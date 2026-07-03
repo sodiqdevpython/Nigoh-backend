@@ -300,19 +300,6 @@
                                 <div class="row-line"><span class="k">Vaqti</span><span class="v" id="dTs">—</span></div>
                                 <div class="row-line"><span class="k">Turgan davomiyligi</span><span class="v" id="dDuration">—</span></div>
 
-                                <div class="kb-mouse">
-                                    <div class="metric">
-                                        <i class="zmdi zmdi-keyboard"></i>
-                                        <div class="v" id="dKb">—</div>
-                                        <div class="l">Klaviatura</div>
-                                    </div>
-                                    <div class="metric">
-                                        <i class="zmdi zmdi-mouse"></i>
-                                        <div class="v" id="dMouse">—</div>
-                                        <div class="l">Sichqoncha</div>
-                                    </div>
-                                </div>
-
                                 <h6 style="margin-top:14px;">Manzil</h6>
                                 <div class="row-line"><span class="k">IP</span><span class="v" id="dIp">—</span></div>
                                 <div class="row-line"><span class="k">Davlat</span><span class="v"><span class="flag" id="dFlag"></span><span id="dCountry">—</span></span></div>
@@ -419,6 +406,21 @@
             </div>
         </div>
 
+        <!-- ===== Dunyo xaritasi — davlatlar bo'yicha ulanishlar ===== -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card bg-dark-transparent border-light-3 text-white">
+                    <div class="card-body p-0">
+                        <div class="px-4 py-3 border-bottom-light-3">
+                            <h6 class="mb-0 text-white"><i class="zmdi zmdi-map mr-2" style="color:#4caf50"></i> Dunyo xaritasi — davlatlar bo'yicha</h6>
+                            <small class="text-muted">Har doira = ulanishlar soni (ustiga bosing)</small>
+                        </div>
+                        <div id="worldMap" style="height:420px; background:#0a0f1c;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -508,14 +510,14 @@
         .ringRepeatPeriod(1400);
     globe.ringsData([{ lat: ORIGIN.lat, lng: ORIGIN.lng }]);
 
-    // Arc konfig — click hitbox kengaytirilgan
+    // Arc konfig — click hitbox kengaytirilgan, harakat sekin
     globe
         .arcColor('color')
-        .arcAltitudeAutoScale(0.4)
-        .arcStroke(0.9)                       // kengroq — bosish oson
-        .arcDashLength(0.4)
-        .arcDashGap(0.15)
-        .arcDashAnimateTime(3500)
+        .arcAltitudeAutoScale(0.45)
+        .arcStroke(0.9)
+        .arcDashLength(0.5)
+        .arcDashGap(0.12)
+        .arcDashAnimateTime(6000)             // sekinroq uchish
         .arcsTransitionDuration(300)
         .arcLabel(d => d.tooltip)
         .onArcClick(a => a && openDetail(a.raw))
@@ -538,8 +540,11 @@
     let dayStart = null, dayEnd = null;
 
     const MAX_LIVE_ARCS = 5;
-    const ARC_LIFETIME_MS = 6500;
-    const TICK_INTERVAL_MS = 2000;
+    const ARC_LIFETIME_MS = 14000;   // chiziqlar uzoqroq (14 sek)
+    const TICK_INTERVAL_MS = 2500;   // sekinroq
+    const ARC_DASH_ANIMATE_MS = 6000;  // o'q sekinroq uchadi
+    // Sahifa ochilishida darhol 3 ta arc chiqishi uchun boshlang'ich preload
+    const INITIAL_BURST = 3;
 
     const ARC_COLORS = ['#4caf50', '#4dabf7', '#ff9800', '#e91e63', '#9c27b0', '#00bcd4'];
     let colorIdx = 0;
@@ -565,11 +570,14 @@
 
     function buildArc(a) {
         const c = nextColor();
+        // Har arc — PC ning binosidan chiqadi (backend'dan kelgan `origin`)
+        const oLat = (a.origin && a.origin.lat) || ORIGIN.lat;
+        const oLng = (a.origin && a.origin.lng) || ORIGIN.lng;
         return {
-            startLat: ORIGIN.lat, startLng: ORIGIN.lng,
+            startLat: oLat, startLng: oLng,
             endLat: a.geo.lat, endLng: a.geo.lng,
             color: [c, c + '55'],
-            tooltip: `${a.hostname} → ${a.domain}`,
+            tooltip: `${a.hostname} → ${a.domain}${a.origin ? ' (' + a.origin.label + ')' : ''}`,
             raw: a,
             createdAt: Date.now(),
         };
@@ -608,18 +616,21 @@
     }
 
     function tick() {
+        // Pauza — hech narsa qilmaymiz, mavjud chiziqlar joyida qoladi
         if (!playing || !allActivities.length) return;
+
         if (arcSeen < allActivities.length) {
             const a = allActivities[arcSeen];
             arcQueue.push(buildArc(a));
             arcSeen++;
             setPlaybackTime(new Date(a.ts).getTime());
         } else if (dayEnd) {
-            // Kun tugadi — boshiga qaytamiz (endless loop)
+            // Kun tugadi — arcSeen 0 ga qaytadi (endless loop).
+            // Mavjud chiziqlar joyida qoladi (o'zi expiration bilan ketadi).
             arcSeen = 0;
-            arcQueue = [];
             setPlaybackTime(dayStart);
         }
+        // Faqat playing rejimida eski chiziqlar o'chadi
         const now = Date.now();
         arcQueue = arcQueue.filter(a => (now - a.createdAt) < ARC_LIFETIME_MS);
         while (arcQueue.length > MAX_LIVE_ARCS) arcQueue.shift();
@@ -738,8 +749,6 @@
         document.getElementById('dTitle').textContent = a.title || '—';
         document.getElementById('dTs').textContent = fmtTime(a.ts);
         document.getElementById('dDuration').textContent = fmtDur(a.duration);
-        document.getElementById('dKb').textContent = fmtDur(a.kb_seconds || 0);
-        document.getElementById('dMouse').textContent = fmtDur(a.mouse_seconds || 0);
         document.getElementById('dIp').textContent = a.geo.ip || '—';
         document.getElementById('dFlag').textContent = flagEmoji(a.geo.country_code);
         document.getElementById('dCountry').textContent = a.geo.country || '—';
@@ -787,6 +796,79 @@
             searchRes.classList.remove('show');
         }
     });
+
+    // ===== DUNYO XARITASI — davlatlar bo'yicha markerlar =====
+    let worldMap = null;
+    let worldMarkers = [];
+
+    function renderWorldMap() {
+        const cont = document.getElementById('worldMap');
+        if (!cont) return;
+
+        if (!worldMap) {
+            worldMap = L.map('worldMap', {
+                center: [20, 30], zoom: 2, minZoom: 2, maxZoom: 6,
+                worldCopyJump: true, zoomControl: true,
+                attributionControl: false,
+            });
+            // CartoDB Dark Matter — theme'ga mos qora fon
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                subdomains: 'abcd', maxZoom: 6,
+            }).addTo(worldMap);
+        }
+
+        // Eski markerlarni tozalaymiz
+        worldMarkers.forEach(m => worldMap.removeLayer(m));
+        worldMarkers = [];
+
+        // Har davlat uchun jamlangan koordinatalar
+        // (bir davlatda bir necha IP bo'lishi mumkin — birinchisini ishlatamiz)
+        const countryData = {};
+        allActivities.forEach(a => {
+            const key = a.geo.country || '';
+            if (!key) return;
+            if (!countryData[key]) {
+                countryData[key] = {
+                    country: key,
+                    code: a.geo.country_code || '',
+                    lat: a.geo.lat, lng: a.geo.lng,
+                    count: 0, domains: new Set(),
+                };
+            }
+            countryData[key].count++;
+            countryData[key].domains.add(a.domain);
+        });
+
+        const arr = Object.values(countryData);
+        if (!arr.length) return;
+        const maxCount = Math.max(...arr.map(c => c.count));
+
+        arr.forEach(c => {
+            // Radius: 6..30 px, count ga proporsional
+            const r = 6 + (c.count / maxCount) * 24;
+
+            const marker = L.circleMarker([c.lat, c.lng], {
+                radius: r,
+                fillColor: '#4dabf7', color: '#4dabf7',
+                weight: 2, opacity: 0.9, fillOpacity: 0.45,
+            }).addTo(worldMap);
+
+            const flag = c.code
+                ? String.fromCodePoint(...[...c.code.toUpperCase()].map(x => 127397 + x.charCodeAt(0)))
+                : '🌐';
+            const domains = [...c.domains].slice(0, 5).join(', ');
+            marker.bindPopup(`
+                <div style="color:#333; font-size:13px;">
+                    <div style="font-size:20px; margin-bottom:6px;">${flag} <b>${c.country}</b></div>
+                    <div><b>Ulanishlar:</b> ${c.count}</div>
+                    <div><b>Domenlar (${c.domains.size}):</b> ${domains}${c.domains.size>5?'...':''}</div>
+                </div>
+            `);
+            worldMarkers.push(marker);
+        });
+
+        setTimeout(() => worldMap.invalidateSize(), 100);
+    }
 
     // Top 10 statistikalari render
     function renderTopTables(topDomains, topCountries) {
@@ -837,13 +919,38 @@
                 document.getElementById('statTotal').textContent = allActivities.length;
                 document.getElementById('statCountries').textContent = new Set(allActivities.map(a => a.geo.country).filter(Boolean)).size;
 
-                // Fallback holatida ham arc'lar bo'sh emas — ularni ko'rsatamiz
+                // Origin nuqtalarini yangilash (barcha binolar)
+                if (data.origins && data.origins.length) {
+                    const originPoints = data.origins.map(o => ({
+                        lat: o.lat, lng: o.lng, label: o.label,
+                        size: 0.4, color: '#4dabf7'
+                    }));
+                    globe
+                        .pointsData(originPoints)
+                        .pointLabel(d => d.label);
+                    globe.ringsData(originPoints);
+                }
+
                 arcQueue = []; arcSeen = 0; colorIdx = 0;
-                setPlaybackTime(dayStart);
+
+                // BOSHLANG'ICH BURST — 3 ta oxirgi arc darhol chiqsin
+                // (sahifa bo'sh turmasin, foydalanuvchi kutmasin)
+                if (allActivities.length > 0) {
+                    const burstStart = Math.max(0, allActivities.length - INITIAL_BURST);
+                    for (let i = burstStart; i < allActivities.length; i++) {
+                        arcQueue.push(buildArc(allActivities[i]));
+                    }
+                    arcSeen = allActivities.length;   // hammasi "ko'rildi"
+                    const lastTs = new Date(allActivities[allActivities.length-1].ts).getTime();
+                    setPlaybackTime(lastTs);
+                } else {
+                    setPlaybackTime(dayStart);
+                }
                 renderArcs();
 
                 renderTopTables(data.top_domains || [], data.top_countries || []);
                 renderActivityMarkers();
+                renderWorldMap();
 
                 document.getElementById('loadingOverlay').classList.add('hide');
             })
