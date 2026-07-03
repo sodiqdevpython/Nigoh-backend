@@ -20,6 +20,7 @@ from tracking.models import (
 )
 from endpoints.consumers import LIVE_METRICS
 import json
+import re
 import hashlib
 from datetime import datetime
 from datetime import timedelta
@@ -289,45 +290,62 @@ def device_detail_view(request, pk):
 
     current_tab = request.GET.get('tab', 'usage')
     search_query = request.GET.get('search', '')
-    
-    # VAQT FILTRINI OLISH (Default: 'today' - Bugun)
-    time_filter = request.GET.get('time', 'today') 
+
+    # VAQT FILTRI — 'today' | 'week' | 'month' | 'range' (date_from / date_to)
+    time_filter = request.GET.get('time', 'today')
+    date_from_str = request.GET.get('date_from', '').strip()
+    date_to_str = request.GET.get('date_to', '').strip()
 
     latest_rc = RemoteControlSession.objects.filter(computer=computer).order_by('-created_at').first()
     latest_stream_url = latest_rc.stream_url if latest_rc and latest_rc.stream_url else None
 
-    # Oxirida slash (/) bo'lsa, olib tashlaymiz (ikkita slash bo'lib qolmasligi uchun)
     if latest_stream_url and latest_stream_url.endswith('/'):
         latest_stream_url = latest_stream_url[:-1]
-    
+
     context = {
         'computer': computer,
         'current_tab': current_tab,
         'search_query': search_query,
         'time_filter': time_filter,
+        'date_from': date_from_str,
+        'date_to': date_to_str,
         'secure_token': get_secure_token(),
         'latest_stream_url': latest_stream_url,
         'live_metrics': LIVE_METRICS.get(_computer_key(computer)),
+        'last_screenshot_url': computer.last_screenshot.url if computer.last_screenshot else None,
+        'last_screenshot_at': computer.last_screenshot_at,
     }
 
     # ==========================================
     # CHART UCHUN VAQT ORALIQLARINI HISOBLASH
     # ==========================================
     now = timezone.now()
-    
-    # Default sifatida "Bugun" 00:00 dan boshlanadi
     start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    if time_filter == 'week':
-        # Shu haftaning Dushanba kunidan boshlab
+    end_date = None  # None = cheklovsiz (kelajakgacha)
+
+    if time_filter == 'range' and (date_from_str or date_to_str):
+        # Foydalanuvchi maxsus oralig'ini kiritdi (YYYY-MM-DD formatida)
+        try:
+            if date_from_str:
+                d = datetime.strptime(date_from_str, '%Y-%m-%d')
+                start_date = timezone.make_aware(d.replace(hour=0, minute=0, second=0, microsecond=0))
+            else:
+                start_date = timezone.make_aware(datetime(1970, 1, 1))
+            if date_to_str:
+                d = datetime.strptime(date_to_str, '%Y-%m-%d')
+                end_date = timezone.make_aware(d.replace(hour=23, minute=59, second=59, microsecond=999999))
+        except ValueError:
+            pass
+    elif time_filter == 'week':
         start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     elif time_filter == 'month':
-        # Shu oyning 1-sanasidan boshlab
         start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    # Chartlar uchun bazaviy so'rov (Faqat tanlangan vaqtdan keyingilarni olamiz - Server tezligi oshadi)
     app_qs = AppUsageStatistic.objects.filter(computer=computer, created_at__gte=start_date)
     act_qs = ActivityLog.objects.filter(computer=computer, created_at__gte=start_date)
+    if end_date is not None:
+        app_qs = app_qs.filter(created_at__lte=end_date)
+        act_qs = act_qs.filter(created_at__lte=end_date)
 
     # ==========================================
     # CHART UCHUN TOP 10 STATISTIKALARNI TAYYORLASH (GURUHLASH)
@@ -380,7 +398,9 @@ def device_detail_view(request, pk):
             qs = qs.filter(app_name__icontains=search_query)
             
     elif current_tab == 'sessions':
-        qs = ScreenShareSession.objects.filter(computer=computer).order_by('-created_at')
+        # RemoteControlSession — foydalanuvchi "Boshqarish" tugmasini bosganda yaratilgan
+        # sessiyalar. Har birining tugash vaqti = created_at + duration (soniya).
+        qs = RemoteControlSession.objects.filter(computer=computer).order_by('-created_at')
 
     elif current_tab == 'updates':
         # Update tarixi + hozir kutilayotgan UPDATE buyruqlari
@@ -474,7 +494,7 @@ def group_command_view(request, pk):
     if command == 'open_url':
         if not url_param:
             return JsonResponse({'error': "URL kiriting"}, status=400)
-        if not (url_param.startswith('http://') or url_param.startswith('https://')):
+        if not re.match(r'^https?://', url_param, re.IGNORECASE):
             url_param = 'https://' + url_param
         shell_cmd = f'explorer.exe "{url_param}"'
     elif command in command_map:
@@ -540,7 +560,7 @@ def device_command_view(request, pk):
     elif command == 'open_url':
         if not url_param:
             return JsonResponse({'error': "URL kiriting"}, status=400)
-        if not (url_param.startswith('http://') or url_param.startswith('https://')):
+        if not re.match(r'^https?://', url_param, re.IGNORECASE):
             url_param = 'https://' + url_param
         # explorer.exe — terminal ochilmaydi, brauzerda ochiladi
         shell_cmd = f'explorer.exe "{url_param}"'

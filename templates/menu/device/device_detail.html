@@ -43,6 +43,76 @@
     }
     .nav-tabs-glass .nav-link:hover { color: #ffffff; border-color: rgba(255, 255, 255, 0.3); }
     .nav-tabs-glass .nav-link.active { color: #ffffff; border-color: #ffffff; text-shadow: 0px 1px 4px rgba(0, 0, 0, 0.9); }
+
+    /* Hero screenshot */
+    .screenshot-hero {
+        position: relative;
+        border-radius: 10px;
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        min-height: 260px;
+    }
+    .screenshot-hero img {
+        display: block;
+        width: 100%;
+        max-height: 480px;
+        object-fit: contain;
+        background: #0a0a0f;
+    }
+    .screenshot-hero .hero-meta {
+        position: absolute;
+        top: 10px; right: 12px;
+        background: rgba(0,0,0,0.6);
+        color: #fff;
+        padding: 4px 10px;
+        font-size: 11px;
+        border-radius: 20px;
+        border: 1px solid rgba(255,255,255,0.15);
+        display: flex; align-items: center; gap: 6px;
+    }
+    .screenshot-hero .hero-loading {
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center;
+        min-height: 260px; color: #ced4da;
+    }
+    .screenshot-hero .hero-dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: #4caf50; display: inline-block;
+        box-shadow: 0 0 6px #4caf50;
+    }
+
+    /* App icons — inline chip */
+    .app-chip { display: inline-flex; align-items: center; gap: 8px; }
+    .app-chip .app-ico {
+        width: 22px; height: 22px; border-radius: 4px;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 12px; color: #fff;
+        background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+        overflow: hidden;
+    }
+    .app-chip .app-ico img { width: 100%; height: 100%; object-fit: contain; }
+
+    /* Date range picker */
+    .date-range .form-control {
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: #fff;
+        min-width: 130px;
+    }
+    .date-range .form-control::-webkit-calendar-picker-indicator {
+        filter: invert(1) opacity(0.6);
+    }
+
+    /* Sessions countdown */
+    .session-countdown {
+        font-family: monospace; font-size: 14px;
+        padding: 4px 10px; border-radius: 20px;
+        background: rgba(255,193,7,0.12); border: 1px solid rgba(255,193,7,0.4); color: #ffc107;
+    }
+    .session-countdown.expired {
+        background: rgba(108,117,125,0.15); border-color: rgba(108,117,125,0.4); color: #adb5bd;
+    }
 </style>
 
 <div class="content-wrapper">
@@ -77,7 +147,10 @@
                                         <span class="badge px-3 py-2" style="background: rgba(220, 53, 69, 0.2); color: #ff5252; border: 1px solid #ff5252; text-shadow: none;"><i class="zmdi zmdi-circle-o"></i> Oflayn</span>
                                     {% endif %}
                                 </div>
-                                <p class="text-muted mb-0 small">Oxirgi aloqa: <br> <span class="text-light">{{ computer.last_seen|date:"d M Y, H:i:s" }}</span></p>
+                                <p class="text-muted mb-0 small">
+                                    Oxirgi aloqa: <span class="text-light">{{ computer.last_seen|date:"d M Y, H:i:s" }}</span><br>
+                                    Ro'yxatga olingan: <span class="text-light">{{ computer.created_at|date:"d M Y, H:i" }}</span>
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -103,9 +176,11 @@
                                             </ul>
                                         </div>
                                         <div class="col-md-6">
-                                            <h6 class="text-light border-bottom-light-3 pb-2 mb-3"><i class="zmdi zmdi-network"></i> Tarmoq va Manzillar</h6>
+                                            <h6 class="text-light border-bottom-light-3 pb-2 mb-3"><i class="zmdi zmdi-network"></i> Tarmoq va Dasturlar</h6>
                                             <ul class="list-group list-group-flush bg-transparent">
                                                 <li class="list-group-item bg-transparent text-white px-0 d-flex justify-content-between align-items-center border-light-3 px-3"><span class="text-muted">MAC Manzil:</span><span class="text-right text-monospace">{{ computer.mac_address|default:"-" }}</span></li>
+                                                <li class="list-group-item bg-transparent text-white px-0 d-flex justify-content-between align-items-center border-light-3 px-3"><span class="text-muted">Agent (Nigoh.exe):</span><span class="text-right"><span class="badge px-2 py-1" style="background: rgba(76,175,80,0.15); border: 1px solid rgba(76,175,80,0.4); color:#4caf50; text-shadow: none;">v{{ computer.agent_version|default:"—" }}</span></span></li>
+                                                <li class="list-group-item bg-transparent text-white px-0 d-flex justify-content-between align-items-center border-light-3 px-3"><span class="text-muted">Watchdog:</span><span class="text-right"><span class="badge px-2 py-1" style="background: rgba(33,150,243,0.15); border: 1px solid rgba(33,150,243,0.4); color:#4dabf7; text-shadow: none;">v{{ computer.watchdog_version|default:"—" }}</span></span></li>
                                                 <li class="list-group-item bg-transparent text-white px-0 d-flex justify-content-between align-items-center border-light-3 border-bottom-0 px-3"><span class="text-muted">Biriktirilgan Guruh:</span><span class="text-right">{% if computer.group %}<span class="badge px-2 py-1" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); text-shadow: none;"><i class="zmdi zmdi-folder"></i> {{ computer.group.name }}</span>{% else %}<span class="text-warning">Guruhsiz</span>{% endif %}</span></li>
                                             </ul>
                                         </div>
@@ -117,6 +192,79 @@
                 </div>
             </div>
         </div>
+
+        {# ===== HERO — Eng oxirgi ekran rasmi ===== #}
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="screenshot-hero" id="heroScreenshot">
+                    {% if last_screenshot_url %}
+                        <img id="heroImg" src="{{ last_screenshot_url }}?t={{ last_screenshot_at|date:'U' }}" alt="Eng oxirgi ekran">
+                        <div class="hero-meta">
+                            {% if computer.is_online %}
+                                <span class="hero-dot"></span> Yangilanmoqda...
+                            {% else %}
+                                <i class="zmdi zmdi-time"></i>
+                            {% endif %}
+                            <span id="heroTime">{{ last_screenshot_at|date:"d M, H:i" }}</span>
+                        </div>
+                    {% else %}
+                        <div class="hero-loading" id="heroLoading">
+                            {% if computer.is_online %}
+                                <div class="spinner-border text-light mb-3" style="width:2.5rem;height:2.5rem;" role="status"></div>
+                                <h6 class="text-white">Ekran rasmi olinmoqda...</h6>
+                                <p class="text-muted small mb-0">Iltimos, biroz kuting</p>
+                            {% else %}
+                                <i class="zmdi zmdi-desktop-mac" style="font-size:64px;color:#4a4f5c;"></i>
+                                <h6 class="text-muted mt-3 mb-0">Rasm hali olinmagan</h6>
+                                <p class="text-muted small">Qurilma onlayn bo'lganda avtomatik olinadi</p>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if computer.is_online %}
+        <script>
+        // Sahifa ochilganda avtomatik screenshot so'rovi (fon rejimida)
+        (function() {
+            fetch("{% url 'request_screenshot' computer.id %}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error || !data.request_id) return;
+                const rid = data.request_id;
+                let attempts = 0;
+                const t = setInterval(function() {
+                    attempts++;
+                    if (attempts > 20) { clearInterval(t); return; }
+                    fetch(`/device/{{ computer.id }}/screenshot-poll/${rid}/`)
+                        .then(r => r.json())
+                        .then(pd => {
+                            if (pd.status === 'COMPLETED' && pd.image_url) {
+                                clearInterval(t);
+                                const hero = document.getElementById('heroScreenshot');
+                                const bust = '?t=' + Date.now();
+                                hero.innerHTML =
+                                    '<img id="heroImg" src="' + pd.image_url + bust + '" alt="Eng oxirgi ekran">' +
+                                    '<div class="hero-meta"><span class="hero-dot"></span> ' +
+                                    'Yangi <span id="heroTime">' + new Date().toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'}) + '</span></div>';
+                            } else if (pd.status === 'FAILED') {
+                                clearInterval(t);
+                            }
+                        })
+                        .catch(() => {});
+                }, 1500);
+            })
+            .catch(() => {});
+        })();
+        </script>
+        {% endif %}
 
         {% if computer.is_online %}
         <div class="row mb-4">
@@ -437,12 +585,12 @@
                 sendCmd('kill_process', cmds);
             });
 
-            // URL ochish
+            // URL ochish — sxema yozilmasa https:// avtomatik qo'shiladi
             document.getElementById('btnOpenUrl').addEventListener('click', function(){
-                const url = document.getElementById('urlInput').value.trim();
+                let url = document.getElementById('urlInput').value.trim();
                 if (!url) { showResult("URL kiriting.", false); return; }
-                if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                    showResult("URL http:// yoki https:// bilan boshlanishi kerak.", false); return;
+                if (!/^https?:\/\//i.test(url)) {
+                    url = 'https://' + url;
                 }
                 sendCmd('open_url', url);
             });
@@ -487,15 +635,43 @@
             <li class="nav-item"><a class="nav-link {% if current_tab == 'updates' %}active{% endif %}" href="?tab=updates"><i class="zmdi zmdi-refresh mr-1"></i> Yangilanishlar</a></li>
         </ul>
 
-        {% if current_tab != 'sessions' %}
-        <form method="GET" class="mb-4 d-flex">
+        {% if current_tab != 'sessions' and current_tab != 'updates' %}
+        <form method="GET" class="mb-4">
             <input type="hidden" name="tab" value="{{ current_tab }}">
-            <input type="hidden" name="time" value="{{ time_filter }}">
-            <input type="text" name="search" class="form-control bg-dark-transparent border-light-3 text-white w-50 mr-2" placeholder="Shu bo'limdan izlash..." value="{{ search_query }}">
-            <button type="submit" class="btn btn-light px-4"><i class="zmdi zmdi-search"></i> Izlash</button>
-            {% if search_query %}
-                <a href="?tab={{ current_tab }}&time={{ time_filter }}" class="btn btn-secondary ml-2 px-3">Tozalash</a>
-            {% endif %}
+            <div class="row no-gutters" style="gap:8px;">
+                <div class="col-md-4">
+                    <input type="text" name="search" class="form-control bg-dark-transparent border-light-3 text-white" placeholder="Shu bo'limdan izlash..." value="{{ search_query }}">
+                </div>
+                {% if current_tab == 'usage' or current_tab == 'activity' %}
+                <div class="col-md-auto date-range">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text bg-dark-transparent border-light-3 text-muted" style="border-right:0;">Dan</span>
+                        </div>
+                        <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+                    </div>
+                </div>
+                <div class="col-md-auto date-range">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text bg-dark-transparent border-light-3 text-muted" style="border-right:0;">Gacha</span>
+                        </div>
+                        <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+                    </div>
+                </div>
+                <input type="hidden" name="time" value="{% if date_from or date_to %}range{% else %}{{ time_filter }}{% endif %}">
+                {% else %}
+                <input type="hidden" name="time" value="{{ time_filter }}">
+                {% endif %}
+                <div class="col-md-auto">
+                    <button type="submit" class="btn btn-light px-4"><i class="zmdi zmdi-search"></i> Izlash</button>
+                </div>
+                {% if search_query or date_from or date_to %}
+                <div class="col-md-auto">
+                    <a href="?tab={{ current_tab }}" class="btn btn-secondary px-3">Tozalash</a>
+                </div>
+                {% endif %}
+            </div>
         </form>
         {% endif %}
 
@@ -533,13 +709,18 @@
                                 {% for item in page_obj %}
                                 <tr data-toggle="collapse" data-target="#usage-detail-{{ item.id }}" style="cursor: pointer;">
                                     <td class="text-center text-muted"><i class="zmdi zmdi-chevron-right"></i></td>
-                                    <td class="font-weight-bold text-white"><i class="zmdi zmdi-window-maximize mr-2" style="color: #a0a0a0;"></i> {{ item.app_name }}</td>
+                                    <td class="font-weight-bold text-white">
+                                        <span class="app-chip" data-app-name="{{ item.app_name }}">
+                                            <span class="app-ico"><i class="zmdi zmdi-window-maximize" style="color:#adb5bd;"></i></span>
+                                            <span>{{ item.app_name }}</span>
+                                        </span>
+                                    </td>
                                     <td>{{ item.total_open_seconds }} sekund</td>
                                     <td class="text-success">{{ item.active_seconds }} sekund</td>
                                     <td>{{ item.keyboard_active_seconds }} sekund</td>
                                     <td>{{ item.mouse_active_seconds }} sekund</td>
                                 </tr>
-                                
+
                                 <tr class="p-0 border-0 bg-transparent">
                                     <td colspan="6" class="p-0 border-0">
                                         <div class="collapse" id="usage-detail-{{ item.id }}">
@@ -548,8 +729,17 @@
                                                 <div class="row text-light">
                                                     <div class="col-md-6">
                                                         <ul class="list-unstyled">
-                                                            <li class="mb-2"><strong class="text-muted">ID Raqami:</strong> #{{ item.id }}</li>
+                                                            <li class="mb-2"><strong class="text-muted">ID:</strong> #{{ item.id }}</li>
                                                             <li class="mb-2"><strong class="text-muted">Fayl nomi:</strong> {{ item.app_name }}</li>
+                                                            {% if item.full_path %}
+                                                            <li class="mb-2"><strong class="text-muted">To'liq yo'l:</strong>
+                                                                <div class="mt-1 p-2 rounded text-monospace" style="background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.08);font-size:12px;color:#8be9fd;word-break:break-all;">
+                                                                    {{ item.full_path }}
+                                                                </div>
+                                                            </li>
+                                                            {% else %}
+                                                            <li class="mb-2"><strong class="text-muted">To'liq yo'l:</strong> <span class="text-muted">— (aniqlanmadi)</span></li>
+                                                            {% endif %}
                                                             <li class="mb-2"><strong class="text-muted">Baza qaydi:</strong> {{ item.created_at|date:"d M Y, H:i:s" }}</li>
                                                         </ul>
                                                     </div>
@@ -633,7 +823,12 @@
                                 <tr data-toggle="collapse" data-target="#act-detail-{{ item.id }}" style="cursor: pointer;">
                                     <td class="text-center text-muted"><i class="zmdi zmdi-chevron-right"></i></td>
                                     <td>{{ item.title|default:"Nomsiz oyna"|truncatechars:60 }}</td>
-                                    <td class="font-weight-bold text-white">{{ item.app_name }}</td>
+                                    <td class="font-weight-bold text-white">
+                                        <span class="app-chip" data-app-name="{{ item.app_name }}">
+                                            <span class="app-ico"><i class="zmdi zmdi-window-maximize" style="color:#adb5bd;"></i></span>
+                                            <span>{{ item.app_name }}</span>
+                                        </span>
+                                    </td>
                                     <td class="text-success">{{ item.duration_seconds }} sekund</td>
                                     <td>{{ item.created_at|date:"H:i, d-M" }}</td>
                                 </tr>
@@ -785,74 +980,135 @@
                         <table class="table table-hover table-glass mb-0">
                             <thead>
                                 <tr>
-                                    <th>So'ralgan vaqt</th>
-                                    <th>Holati</th>
+                                    <th>Muallif</th>
+                                    <th>Davomiyligi</th>
+                                    <th>Qolgan vaqt</th>
                                     <th>Stream URL</th>
-                                    <th>Sana</th>
+                                    <th>Boshlandi</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for item in page_obj %}
-                                <tr>
-                                    <td>{{ item.requested_duration }} sekund</td>
+                                <tr data-session-row
+                                    data-created="{{ item.created_at|date:'U' }}"
+                                    data-duration="{{ item.duration }}">
+                                    <td><i class="zmdi zmdi-account mr-1 text-muted"></i> {{ item.author.username }}</td>
                                     <td>
-                                        {% if item.status == 'ACTIVE' %}
-                                            <span class="badge px-2 py-1" style="background: rgba(40, 167, 69, 0.2); color: #4caf50; border: 1px solid #4caf50; text-shadow: none;">Faol</span>
-                                        {% elif item.status == 'CLOSED' %}
-                                            <span class="badge px-2 py-1" style="background: rgba(255, 255, 255, 0.1); color: #ccc; border: 1px solid #ccc; text-shadow: none;">Yopilgan</span>
-                                        {% else %}
-                                            <span class="badge px-2 py-1" style="background: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; text-shadow: none;">Kutilmoqda</span>
-                                        {% endif %}
+                                        {% if item.duration >= 60 %}{{ item.duration|floatformat:0 }} sekund ({{ item.duration|divisibleby:60|yesno:"~," }} dq){% else %}{{ item.duration }} sekund{% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="session-countdown" data-countdown>—</span>
                                     </td>
                                     <td>
                                         {% if item.stream_url %}
-                                            <a href="{{ item.stream_url }}" 
-                                               target="_blank" 
-                                               onclick="return confirm('⚠️ XAVFSIZLIK OGOHLANTIRISHI:\n\nKompyuterni masofadan boshqarish uchun siz ushbu qurilma bilan bitta tarmoqda (Local Network / Wi-Fi) bo\'lishingiz shart.\n\nDavom etishni xohlaysizmi?');" 
-                                               class="btn btn-sm px-3" 
+                                            <a href="{{ item.stream_url }}" target="_blank"
+                                               data-session-btn
+                                               onclick="return confirmSession(this);"
+                                               class="btn btn-sm px-3"
                                                style="background: rgba(40, 167, 69, 0.2); color: #4caf50; border: 1px solid #4caf50; text-shadow: none;">
                                                 <i class="zmdi zmdi-play-circle mr-1"></i> Boshqarish
                                             </a>
                                         {% else %}
-                                            <span class="text-muted">-</span>
+                                            <span class="text-muted">— (kutilmoqda)</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ item.created_at|date:"d M, H:i" }}</td>
+                                    <td>{{ item.created_at|date:"d M Y, H:i" }}</td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="4" class="text-center py-5 text-muted">Ma'lumot topilmadi</td></tr>
+                                <tr><td colspan="5" class="text-center py-5 text-muted">Sessiya yaratilmagan</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
 
+                    <script>
+                    (function() {
+                        window.confirmSession = function(a) {
+                            const row = a.closest('tr');
+                            if (row && row.dataset.expired === '1') { return false; }
+                            return confirm('⚠️ XAVFSIZLIK OGOHLANTIRISHI:\n\nKompyuterni masofadan boshqarish uchun siz ushbu qurilma bilan bitta tarmoqda (Local Network / Wi-Fi) bo\'lishingiz shart.\n\nDavom etishni xohlaysizmi?');
+                        };
+
+                        function fmt(sec) {
+                            sec = Math.max(0, sec|0);
+                            const m = Math.floor(sec/60), s = sec%60;
+                            return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+                        }
+
+                        function tick() {
+                            const now = Math.floor(Date.now()/1000);
+                            document.querySelectorAll('[data-session-row]').forEach(row => {
+                                const start = parseInt(row.dataset.created, 10);
+                                const dur   = parseInt(row.dataset.duration, 10);
+                                const remain = start + dur - now;
+                                const el = row.querySelector('[data-countdown]');
+                                const btn = row.querySelector('[data-session-btn]');
+                                if (remain <= 0) {
+                                    row.dataset.expired = '1';
+                                    if (el) { el.textContent = 'Muddati tugadi'; el.classList.add('expired'); }
+                                    if (btn) {
+                                        btn.style.opacity = '0.4';
+                                        btn.style.pointerEvents = 'none';
+                                        btn.style.cursor = 'not-allowed';
+                                        btn.innerHTML = '<i class="zmdi zmdi-lock mr-1"></i> Eskirgan';
+                                    }
+                                } else {
+                                    if (el) { el.textContent = fmt(remain); el.classList.remove('expired'); }
+                                }
+                            });
+                        }
+                        tick();
+                        setInterval(tick, 1000);
+                    })();
+                    </script>
+
                 {% elif current_tab == 'updates' %}
                     {# ===== JORIY VERSIYALAR ===== #}
-                    <div class="row mb-4">
-                        <div class="col-md-4">
-                            <div class="p-3 rounded" style="background: rgba(76, 175, 80, 0.1); border: 1px solid rgba(76, 175, 80, 0.3);">
-                                <div class="text-muted small mb-1">Agent versiya (Nigoh.exe)</div>
-                                <div class="h4 mb-0 text-white">{{ computer.agent_version|default:"—" }}</div>
+                    <div class="p-4">
+                        <div class="row">
+                            <div class="col-md-4 col-sm-6 mb-3">
+                                <div class="p-3 h-100 rounded d-flex flex-column justify-content-center"
+                                     style="background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.25); min-height:100px;">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="zmdi zmdi-shield-check mr-2" style="color:#4caf50; font-size:20px;"></i>
+                                        <div class="text-muted small">Agent (Nigoh.exe)</div>
+                                    </div>
+                                    <div class="text-white" style="font-size:22px; font-weight:300; line-height:1;">
+                                        v{{ computer.agent_version|default:"—" }}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="p-3 rounded" style="background: rgba(33, 150, 243, 0.1); border: 1px solid rgba(33, 150, 243, 0.3);">
-                                <div class="text-muted small mb-1">Watchdog versiya</div>
-                                <div class="h4 mb-0 text-white">{{ computer.watchdog_version|default:"—" }}</div>
+                            <div class="col-md-4 col-sm-6 mb-3">
+                                <div class="p-3 h-100 rounded d-flex flex-column justify-content-center"
+                                     style="background: rgba(33,150,243,0.08); border: 1px solid rgba(33,150,243,0.25); min-height:100px;">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="zmdi zmdi-eye mr-2" style="color:#4dabf7; font-size:20px;"></i>
+                                        <div class="text-muted small">Watchdog Service</div>
+                                    </div>
+                                    <div class="text-white" style="font-size:22px; font-weight:300; line-height:1;">
+                                        v{{ computer.watchdog_version|default:"—" }}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="p-3 rounded" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15);">
-                                <div class="text-muted small mb-1">Oxirgi versiya xabari</div>
-                                <div class="h6 mb-0 text-white">{{ computer.last_version_report|date:"d M Y, H:i"|default:"—" }}</div>
+                            <div class="col-md-4 col-sm-12 mb-3">
+                                <div class="p-3 h-100 rounded d-flex flex-column justify-content-center"
+                                     style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); min-height:100px;">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="zmdi zmdi-time mr-2 text-muted" style="font-size:20px;"></i>
+                                        <div class="text-muted small">Oxirgi xabar</div>
+                                    </div>
+                                    <div class="text-white" style="font-size:14px;">
+                                        {{ computer.last_version_report|date:"d M Y, H:i"|default:"—" }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     {# ===== KUTILAYOTGAN YANGILANISHLAR ===== #}
                     {% if pending_commands %}
-                    <div class="mb-4">
-                        <h5 class="text-white mb-3"><i class="zmdi zmdi-time mr-2"></i>Kutilayotgan yangilanishlar</h5>
+                    <div class="px-4 mb-4">
+                        <h6 class="text-white mb-3" style="font-size:14px;"><i class="zmdi zmdi-time mr-2 text-warning"></i>Kutilayotgan yangilanishlar</h6>
                         <div class="table-responsive">
                             <table class="table table-hover table-glass mb-0">
                                 <thead>
@@ -887,23 +1143,25 @@
                     {% endif %}
 
                     {# ===== UPDATE TARIXI ===== #}
-                    <h5 class="text-white mb-3"><i class="zmdi zmdi-time-restore mr-2"></i>Yangilanish tarixi</h5>
+                    <div class="px-4">
+                        <h6 class="text-white mb-3" style="font-size:14px;"><i class="zmdi zmdi-time-restore mr-2 text-muted"></i>Yangilanish tarixi</h6>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-hover table-glass mb-0">
                             <thead>
                                 <tr>
-                                    <th>Sana</th>
+                                    <th class="pl-4">Sana</th>
                                     <th>Target</th>
                                     <th>Eski versiya</th>
                                     <th>Yangi versiya</th>
                                     <th>Holat</th>
-                                    <th>Xato</th>
+                                    <th class="pr-4">Xato</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for log in page_obj %}
                                 <tr>
-                                    <td>{{ log.created_at|date:"d M Y, H:i" }}</td>
+                                    <td class="pl-4">{{ log.created_at|date:"d M Y, H:i" }}</td>
                                     <td>{{ log.target }}</td>
                                     <td>{{ log.from_version|default:"—" }}</td>
                                     <td class="font-weight-bold text-white">{{ log.to_version }}</td>
@@ -914,7 +1172,7 @@
                                             <span class="badge px-2 py-1" style="background: rgba(244, 67, 54, 0.2); color: #ef5350; border: 1px solid #ef5350; text-shadow: none;">✗ Xato</span>
                                         {% endif %}
                                     </td>
-                                    <td class="text-muted small">{{ log.error|truncatechars:60|default:"—" }}</td>
+                                    <td class="text-muted small pr-4">{{ log.error|truncatechars:60|default:"—" }}</td>
                                 </tr>
                                 {% empty %}
                                 <tr><td colspan="6" class="text-center py-5 text-muted">Yangilanish tarixi bo'sh</td></tr>
@@ -1223,5 +1481,114 @@
     })();
 </script>
 {% csrf_token %}
+
+{# ============================================================
+   APP ICONS — mashhur ilovalar uchun kichik logotiplar
+   Simple Icons CDN + fallback ni birlashtiradi. Chart labellariga ham
+   ta'sir qiladi (Chart.js plugin orqali emas — text prefix bilan).
+   ============================================================ #}
+<script>
+(function() {
+    // Kalitlar: app_name lowercase + `.exe` yo'q qilingan
+    // Qiymatlar: {slug, color}
+    // slug — Simple Icons dan (https://simpleicons.org/)
+    const APP_ICONS = {
+        // Brauzerlar
+        'chrome':        {slug:'googlechrome',   color:'4285F4'},
+        'googlechrome':  {slug:'googlechrome',   color:'4285F4'},
+        'firefox':       {slug:'firefox',        color:'FF7139'},
+        'msedge':        {slug:'microsoftedge',  color:'0078D4'},
+        'edge':          {slug:'microsoftedge',  color:'0078D4'},
+        'microsoftedge': {slug:'microsoftedge',  color:'0078D4'},
+        'opera':         {slug:'opera',          color:'FF1B2D'},
+        'brave':         {slug:'brave',          color:'FB542B'},
+        'yandex':        {slug:'yandex',         color:'FF0000'},
+        'safari':        {slug:'safari',         color:'006CFF'},
+        // Messengerlar
+        'telegram':      {slug:'telegram',       color:'26A5E4'},
+        'discord':       {slug:'discord',        color:'5865F2'},
+        'slack':         {slug:'slack',          color:'4A154B'},
+        'whatsapp':      {slug:'whatsapp',       color:'25D366'},
+        'skype':         {slug:'skype',          color:'00AFF0'},
+        'zoom':          {slug:'zoom',           color:'2D8CFF'},
+        'teams':         {slug:'microsoftteams', color:'6264A7'},
+        'msteams':       {slug:'microsoftteams', color:'6264A7'},
+        // Ish dasturlari
+        'winword':       {slug:'microsoftword',       color:'2B579A'},
+        'word':          {slug:'microsoftword',       color:'2B579A'},
+        'excel':         {slug:'microsoftexcel',      color:'217346'},
+        'powerpnt':      {slug:'microsoftpowerpoint', color:'B7472A'},
+        'powerpoint':    {slug:'microsoftpowerpoint', color:'B7472A'},
+        'outlook':       {slug:'microsoftoutlook',    color:'0078D4'},
+        'onenote':       {slug:'microsoftonenote',    color:'7719AA'},
+        // Dev tools
+        'code':          {slug:'visualstudiocode', color:'007ACC'},
+        'vscode':        {slug:'visualstudiocode', color:'007ACC'},
+        'devenv':        {slug:'visualstudio',     color:'5C2D91'},
+        'idea64':        {slug:'intellijidea',     color:'000000'},
+        'pycharm64':     {slug:'pycharm',          color:'21D789'},
+        'webstorm64':    {slug:'webstorm',         color:'00CDD7'},
+        'sublime_text':  {slug:'sublimetext',      color:'FF9800'},
+        'notepad':       {slug:'notepad',          color:'0078D4'},
+        'notepad++':     {slug:'notepad',          color:'90E59A'},
+        'atom':          {slug:'atom',             color:'66595C'},
+        'python':        {slug:'python',           color:'3776AB'},
+        'py':            {slug:'python',           color:'3776AB'},
+        'node':          {slug:'nodedotjs',        color:'339933'},
+        'git':           {slug:'git',              color:'F05032'},
+        'github':        {slug:'github',           color:'FFFFFF'},
+        'docker':        {slug:'docker',           color:'2496ED'},
+        // Media
+        'spotify':       {slug:'spotify',       color:'1DB954'},
+        'vlc':           {slug:'vlcmediaplayer', color:'FF8800'},
+        'obs64':         {slug:'obsstudio',     color:'302E31'},
+        'obs':           {slug:'obsstudio',     color:'302E31'},
+        // O'yin
+        'steam':         {slug:'steam',            color:'000000'},
+        'epicgameslauncher':{slug:'epicgames',     color:'313131'},
+        // System
+        'explorer':      {slug:'windows',   color:'0078D4'},
+        'cmd':           {slug:'windowsterminal', color:'4D4D4D'},
+        'powershell':    {slug:'powershell',      color:'5391FE'},
+        'taskmgr':       {slug:'windows',   color:'0078D4'},
+    };
+
+    function normalize(name) {
+        if (!name) return '';
+        return String(name).toLowerCase().replace(/\.exe$/, '').trim();
+    }
+
+    function iconUrl(slug, color) {
+        return `https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/${slug}.svg`;
+    }
+
+    function iconFor(name) {
+        const key = normalize(name);
+        if (APP_ICONS[key]) return APP_ICONS[key];
+        // exact yo'q — starts-with fallback (masalan "chrome_proxy" → chrome)
+        for (const k in APP_ICONS) {
+            if (key.startsWith(k) || key.endsWith(k)) return APP_ICONS[k];
+        }
+        return null;
+    }
+
+    // DOM icon chip larni yangilash
+    document.querySelectorAll('.app-chip[data-app-name]').forEach(chip => {
+        const info = iconFor(chip.dataset.appName);
+        if (!info) return;
+        const ico = chip.querySelector('.app-ico');
+        if (!ico) return;
+        const img = document.createElement('img');
+        img.src = iconUrl(info.slug, info.color);
+        img.alt = '';
+        img.style.filter = 'brightness(0) invert(1)';   // oq rangga aylantiramiz
+        img.onerror = () => { img.remove(); };
+        ico.innerHTML = '';
+        ico.style.background = '#' + info.color + '33';   // shaffof taxminiy fon
+        ico.style.borderColor = '#' + info.color + '66';
+        ico.appendChild(img);
+    });
+})();
+</script>
 
 {% endblock %}

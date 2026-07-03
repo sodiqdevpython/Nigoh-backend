@@ -3,6 +3,13 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+# ============================================================
+# Admin panel branding
+# ============================================================
+admin.site.site_header = "Nigoh — Boshqaruv paneli"
+admin.site.site_title  = "Nigoh Admin"
+admin.site.index_title = "Boshqaruv paneliga xush kelibsiz"
+
 # Swagger uchun importlar
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view

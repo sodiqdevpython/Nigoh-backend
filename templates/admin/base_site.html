@@ -1,0 +1,55 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | Nigoh Admin{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="icon" type="image/x-icon" href="{% static 'images/favicon.ico' %}">
+    <style>
+        /* Nigoh admin — brand */
+        #header {
+            background: linear-gradient(90deg, #1a1d29 0%, #232636 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 12px 40px;
+        }
+        #header a:link, #header a:visited { color: #fff; }
+        #branding { display: flex; align-items: center; }
+        #branding h1 {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0;
+            font-weight: 500;
+        }
+        #branding h1 img {
+            height: 32px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 3px;
+        }
+        #branding h1 a:link, #branding h1 a:visited {
+            color: #fff;
+        }
+        #user-tools {
+            font-size: 13px;
+            padding: 6px 0;
+        }
+        div.breadcrumbs {
+            background: #232636;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: #adb5bd;
+            padding: 10px 40px;
+        }
+        div.breadcrumbs a { color: #74b9ff; }
+    </style>
+{% endblock %}
+
+{% block branding %}
+    <h1 id="site-name">
+        <img src="{% static 'images/logo-icon.png' %}" alt="Nigoh">
+        <a href="{% url 'admin:index' %}">Nigoh — Boshqaruv paneli</a>
+    </h1>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}

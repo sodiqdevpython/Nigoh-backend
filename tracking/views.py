@@ -639,6 +639,24 @@ class ScreenshotUploadView(APIView):
         ssr.completed_at = timezone.now()
         ssr.save(update_fields=['image', 'status', 'completed_at'])
 
+        # Eng oxirgi rasmni Computer.last_screenshot ga ko'chiramiz —
+        # eski rasm django-cleanup orqali avtomatik o'chadi.
+        try:
+            # ssr.image endi saqlangan, uni ochib Computer ga ko'chiramiz
+            ssr.image.open('rb')
+            from django.core.files.base import ContentFile
+            content = ssr.image.read()
+            ssr.image.close()
+            fname = f"{computer.id}.jpg"
+            # Eski faylni o'chirish uchun None qilib qo'yamiz, keyin yangisini beramiz
+            if computer.last_screenshot:
+                computer.last_screenshot.delete(save=False)
+            computer.last_screenshot.save(fname, ContentFile(content), save=False)
+            computer.last_screenshot_at = timezone.now()
+            computer.save(update_fields=['last_screenshot', 'last_screenshot_at'])
+        except Exception as e:
+            print(f"[last_screenshot copy xato] {e}")
+
         return Response({'status': 'success', 'id': str(ssr.id)}, status=status.HTTP_200_OK)
 
 

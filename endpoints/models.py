@@ -28,13 +28,13 @@ class Computer(BaseModel):
     # YANGI ASOSIY ID — agent o'zi yaratadi va saqlaydi (config.json + Registry)
     device_id = models.CharField(
         max_length=32, unique=True, db_index=True, null=True, blank=True,
-        help_text="Agent tomonidan yaratilgan GUID hex (32 belgi)"
+        help_text="guid hex created by agent"
     )
 
     # ESKI maydon — diagnostika uchun saqlanadi (UNIQUE EMAS, ghost UUID bo'lishi mumkin)
     bios_uuid = models.CharField(
         max_length=100, blank=True, null=True, db_index=True,
-        help_text="Raw BIOS UUID — debug uchun (ghost bo'lishi mumkin)"
+        help_text="Raw BIOS UUID"
     )
 
     # Xavfsizlik — kelajakda agent autentifikatsiyasi uchun (hozir ishlatilmaydi).
@@ -42,7 +42,7 @@ class Computer(BaseModel):
     # Django ORM yaratganda esa default token avtomatik to'ldiriladi.
     auth_token = models.CharField(
         max_length=64, unique=True, null=True, blank=True, default=_gen_auth_token,
-        help_text="Kelajakda agent uchun xavfsizlik tokeni (hozir ixtiyoriy)"
+        help_text="Token unusable for now"
     )
 
     # Qo'shimcha tarmoq ma'lumotlari
@@ -63,11 +63,11 @@ class Computer(BaseModel):
     # Versiya kuzatuvi
     agent_version = models.CharField(
         max_length=20, blank=True, null=True,
-        help_text="Nigoh.exe versiyasi (agent xabar bergan)"
+        help_text="Nigoh.exe versiyasi (agentdan kelgan)"
     )
     watchdog_version = models.CharField(
         max_length=20, blank=True, null=True,
-        help_text="WatchdogService.exe versiyasi"
+        help_text="WatchdogService versiyasi"
     )
     last_version_report = models.DateTimeField(
         blank=True, null=True,
@@ -77,6 +77,14 @@ class Computer(BaseModel):
     # Holat monitoringi
     is_online = models.BooleanField(default=False)
     last_seen = models.DateTimeField(auto_now=True)
+
+    # Eng oxirgi olingan ekranshot (faqat 1 ta saqlanadi — yangi kelsa eski o'chadi).
+    # Device detail sahifasi ochilganda avtomatik so'raladi va shu maydonga yoziladi.
+    last_screenshot = models.ImageField(
+        upload_to='device_screenshots/', blank=True, null=True,
+        help_text="Device detail ochilganda avtomatik olingan eng oxirgi rasm"
+    )
+    last_screenshot_at = models.DateTimeField(blank=True, null=True)
 
     @property
     def key(self):
