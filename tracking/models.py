@@ -353,3 +353,30 @@ class AppIcon(BaseModel):
             if self.name.endswith('.exe'):
                 self.name = self.name[:-4]
         super().save(*args, **kwargs)
+
+
+# ============================================================
+# URLGeoCache — domain -> IP -> geo cache
+# ActivityLog dagi URL lar qayerga chiqishini xaritada ko'rsatish uchun.
+# Har bir domain uchun bir marta hal qilinadi va cache lanadi.
+# ============================================================
+class URLGeoCache(BaseModel):
+    domain = models.CharField(max_length=255, unique=True, db_index=True)
+    ip = models.CharField(max_length=45, blank=True, default='')
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    country = models.CharField(max_length=100, blank=True, default='')
+    country_code = models.CharField(max_length=8, blank=True, default='')
+    city = models.CharField(max_length=100, blank=True, default='')
+    org = models.CharField(max_length=200, blank=True, default='')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    failed = models.BooleanField(default=False, help_text="DNS/geo hal qilinmaganda True")
+
+    class Meta:
+        ordering = ['domain']
+        verbose_name = "URL geo cache"
+        verbose_name_plural = "URL geo cache"
+
+    def __str__(self):
+        loc = f"{self.city}, {self.country}" if self.city else self.country
+        return f"{self.domain} → {self.ip or '—'} ({loc or '—'})"

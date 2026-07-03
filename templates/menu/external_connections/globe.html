@@ -1,0 +1,666 @@
+{% extends 'base/base.html' %}
+{% block content %}
+
+<style>
+    /* Fon — koinot rangi */
+    body { background: #05070d !important; }
+
+    .globe-wrapper {
+        position: relative;
+        width: 100%;
+        height: calc(100vh - 130px);
+        min-height: 520px;
+        overflow: hidden;
+        border-radius: 12px;
+        background: radial-gradient(circle at 50% 40%, #0b1224 0%, #05070d 65%);
+        border: 1px solid rgba(255,255,255,0.06);
+    }
+    #globeViz { width: 100%; height: 100%; }
+
+    /* ===== Yuqori panel — sarlavha va statistika ===== */
+    .top-bar {
+        position: absolute; top: 14px; left: 14px; right: 14px;
+        display: flex; justify-content: space-between; align-items: flex-start;
+        pointer-events: none; z-index: 10; gap: 12px; flex-wrap: wrap;
+    }
+    .top-bar .title-block { pointer-events: auto; }
+    .top-bar h4 {
+        color: #fff; margin: 0; font-weight: 300; letter-spacing: 0.5px;
+        text-shadow: 0 2px 12px rgba(0,0,0,0.9);
+    }
+    .top-bar h4 i { color: #4dabf7; margin-right: 6px; }
+    .top-bar .subtitle { color: #7d8fa8; font-size: 12px; margin-top: 4px; }
+
+    .top-stats { display: flex; gap: 10px; pointer-events: auto; flex-wrap: wrap; }
+    .stat-chip {
+        background: rgba(20, 25, 40, 0.65);
+        border: 1px solid rgba(255,255,255,0.08);
+        backdrop-filter: blur(10px);
+        padding: 8px 14px; border-radius: 8px; min-width: 100px;
+    }
+    .stat-chip .label { color: #7d8fa8; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; }
+    .stat-chip .value { color: #fff; font-size: 18px; font-weight: 300; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .stat-chip .value.pulse { color: #4dabf7; }
+    .stat-chip .value.count { color: #4caf50; }
+
+    /* ===== Search input ===== */
+    .search-wrap {
+        position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+        z-index: 15; pointer-events: auto; width: 320px; max-width: 40%;
+    }
+    .search-wrap input {
+        width: 100%;
+        background: rgba(20, 25, 40, 0.75);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: #fff; padding: 10px 14px 10px 40px;
+        border-radius: 22px; font-size: 13px;
+        backdrop-filter: blur(10px);
+        transition: 0.2s;
+    }
+    .search-wrap input:focus { outline: none; border-color: #4dabf7; box-shadow: 0 0 0 3px rgba(77,171,247,0.15); }
+    .search-wrap .zmdi-search {
+        position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+        color: #6c7a94; font-size: 16px; pointer-events: none;
+    }
+
+    /* ===== Detail panel (o'ng tomonda) ===== */
+    .detail-panel {
+        position: absolute; top: 100px; right: 16px; z-index: 12;
+        width: 320px; max-width: 40%;
+        background: rgba(15, 20, 35, 0.85);
+        backdrop-filter: blur(14px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        padding: 18px;
+        color: #d8dee9;
+        opacity: 0; transform: translateX(20px); transition: 0.25s;
+        pointer-events: none;
+        max-height: calc(100vh - 240px);
+        overflow-y: auto;
+    }
+    .detail-panel.open { opacity: 1; transform: translateX(0); pointer-events: auto; }
+    .detail-panel h6 { color: #4dabf7; margin-bottom: 4px; font-size: 15px; font-weight: 500; }
+    .detail-panel .domain { color: #fff; font-size: 20px; font-weight: 300; word-break: break-all; margin-bottom: 8px; }
+    .detail-panel .flag { display: inline-block; margin-right: 6px; font-size: 20px; vertical-align: middle; }
+    .detail-panel .row-line { display: flex; justify-content: space-between; margin: 8px 0; font-size: 13px; align-items: baseline; }
+    .detail-panel .row-line .k { color: #6c7a94; }
+    .detail-panel .row-line .v { color: #fff; text-align: right; word-break: break-word; margin-left: 8px; }
+    .detail-panel .url-full {
+        margin-top: 8px; padding: 8px 10px; border-radius: 6px;
+        background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);
+        color: #8be9fd; font-family: monospace; font-size: 11px; word-break: break-all;
+    }
+    .detail-panel .close-x {
+        position: absolute; top: 10px; right: 12px; color: #6c7a94;
+        cursor: pointer; font-size: 18px; background: none; border: none;
+    }
+    .detail-panel .close-x:hover { color: #fff; }
+
+    /* ===== Timeline (past qism) ===== */
+    .timeline-wrap {
+        position: absolute; bottom: 0; left: 0; right: 0; z-index: 12;
+        padding: 14px 20px 16px;
+        background: linear-gradient(to top, rgba(5,7,13,0.95) 0%, rgba(5,7,13,0) 100%);
+        pointer-events: auto;
+    }
+    .timeline-top {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 10px;
+    }
+    .timeline-time {
+        color: #fff; font-family: monospace; font-size: 20px; font-weight: 300;
+        text-shadow: 0 0 12px rgba(77,171,247,0.4);
+    }
+    .timeline-controls { display: flex; gap: 6px; align-items: center; }
+    .timeline-controls button {
+        background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+        color: #d8dee9; padding: 6px 12px; border-radius: 6px; font-size: 12px;
+        cursor: pointer; transition: 0.15s;
+    }
+    .timeline-controls button:hover { background: rgba(77,171,247,0.15); border-color: #4dabf7; color: #fff; }
+    .timeline-controls button.active { background: #4dabf7; border-color: #4dabf7; color: #fff; }
+    .timeline-controls .date-input {
+        background: rgba(20,25,40,0.7); border: 1px solid rgba(255,255,255,0.1);
+        color: #fff; padding: 5px 10px; border-radius: 6px; font-size: 12px;
+    }
+    .timeline-controls .date-input::-webkit-calendar-picker-indicator { filter: invert(1) opacity(0.6); }
+
+    .timeline-slider {
+        position: relative; height: 32px;
+        background: linear-gradient(to right, rgba(255,255,255,0.03), rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+        border-radius: 4px; cursor: pointer;
+        border: 1px solid rgba(255,255,255,0.06);
+    }
+    .timeline-progress {
+        position: absolute; left: 0; top: 0; bottom: 0;
+        background: linear-gradient(90deg, rgba(77,171,247,0.15), rgba(77,171,247,0.35));
+        border-radius: 4px;
+        transition: width 0.5s linear;
+        pointer-events: none;
+    }
+    .timeline-marker {
+        position: absolute; top: -3px; bottom: -3px; width: 3px;
+        background: #4dabf7;
+        box-shadow: 0 0 10px #4dabf7, 0 0 20px rgba(77,171,247,0.6);
+        transition: left 0.5s linear;
+        border-radius: 2px;
+        pointer-events: none;
+    }
+    .timeline-dot {
+        position: absolute; top: 50%; transform: translate(-50%, -50%);
+        width: 4px; height: 4px; border-radius: 50%;
+        background: rgba(255,255,255,0.4);
+        pointer-events: none;
+    }
+    .timeline-labels {
+        display: flex; justify-content: space-between; margin-top: 4px;
+        color: #6c7a94; font-size: 10px; font-family: monospace;
+    }
+
+    /* ===== Legenda (chap past) ===== */
+    .legend {
+        position: absolute; bottom: 100px; left: 16px; z-index: 11;
+        background: rgba(15,20,35,0.7); backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 8px; padding: 10px 14px; color: #d8dee9;
+        font-size: 11px;
+    }
+    .legend .item { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+    .legend .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    /* ===== Loading overlay ===== */
+    .loading-overlay {
+        position: absolute; inset: 0; z-index: 20;
+        background: rgba(5,7,13,0.85); backdrop-filter: blur(6px);
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        color: #d8dee9;
+    }
+    .loading-overlay.hide { display: none; }
+    .loading-overlay .spinner-border { color: #4dabf7; width: 3rem; height: 3rem; }
+
+    /* Empty state */
+    .empty-state {
+        position: absolute; inset: 0; z-index: 15;
+        display: none; flex-direction: column; justify-content: center; align-items: center;
+        color: #6c7a94; padding: 40px;
+        pointer-events: none;
+    }
+    .empty-state.show { display: flex; }
+    .empty-state i { font-size: 72px; color: #2a3348; margin-bottom: 16px; }
+    .empty-state h5 { color: #d8dee9; font-weight: 300; }
+
+    /* Search results dropdown */
+    .search-results {
+        position: absolute; top: 100%; left: 0; right: 0;
+        margin-top: 8px;
+        background: rgba(15,20,35,0.95); backdrop-filter: blur(14px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 8px; max-height: 320px; overflow-y: auto;
+        display: none;
+    }
+    .search-results.show { display: block; }
+    .search-results .r-item {
+        padding: 10px 14px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.04);
+        color: #d8dee9; font-size: 12px;
+    }
+    .search-results .r-item:hover { background: rgba(77,171,247,0.1); }
+    .search-results .r-item .d { color: #fff; }
+    .search-results .r-item .m { color: #6c7a94; font-size: 10px; margin-top: 2px; }
+
+    @media (max-width: 768px) {
+        .detail-panel { top: auto; bottom: 130px; right: 8px; left: 8px; width: auto; max-width: none; max-height: 40vh; }
+        .search-wrap { width: calc(100% - 32px); max-width: none; left: 16px; transform: none; }
+        .legend { display: none; }
+    }
+</style>
+
+<div class="content-wrapper">
+    <div class="container-fluid px-2 py-2">
+
+        <div class="globe-wrapper">
+
+            <!-- ===== TOP BAR ===== -->
+            <div class="top-bar">
+                <div class="title-block">
+                    <h4><i class="zmdi zmdi-globe"></i> Tashqariga chiqishlar</h4>
+                    <div class="subtitle">Real-time faoliyat xaritada — <span id="dateLabel">{{ '' }}</span></div>
+                </div>
+                <div class="top-stats">
+                    <div class="stat-chip">
+                        <div class="label">Jami</div>
+                        <div class="value count" id="statTotal">0</div>
+                    </div>
+                    <div class="stat-chip">
+                        <div class="label">Aktiv o'q</div>
+                        <div class="value pulse" id="statLive">0</div>
+                    </div>
+                    <div class="stat-chip">
+                        <div class="label">Davlatlar</div>
+                        <div class="value" id="statCountries">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== SEARCH ===== -->
+            <div class="search-wrap">
+                <i class="zmdi zmdi-search"></i>
+                <input type="text" id="searchInput" placeholder="Domen, PC yoki mamlakat bo'yicha izlash..." autocomplete="off">
+                <div class="search-results" id="searchResults"></div>
+            </div>
+
+            <!-- ===== DETAIL PANEL ===== -->
+            <div class="detail-panel" id="detailPanel">
+                <button class="close-x" onclick="closeDetail()">&times;</button>
+                <h6>URL tafsilotlari</h6>
+                <div class="domain" id="dDomain">—</div>
+                <div class="url-full" id="dUrl">—</div>
+
+                <div class="row-line"><span class="k">Qurilma</span><span class="v" id="dHost">—</span></div>
+                <div class="row-line"><span class="k">Brauzer/Dastur</span><span class="v" id="dApp">—</span></div>
+                <div class="row-line"><span class="k">Sarlavha</span><span class="v" id="dTitle">—</span></div>
+                <div class="row-line"><span class="k">Vaqt (kirilgan)</span><span class="v" id="dTs">—</span></div>
+                <div class="row-line"><span class="k">Turgan vaqti</span><span class="v" id="dDuration">—</span></div>
+
+                <h6 style="margin-top:16px;">Manzil</h6>
+                <div class="row-line"><span class="k">IP</span><span class="v" id="dIp">—</span></div>
+                <div class="row-line"><span class="k">Davlat</span><span class="v"><span class="flag" id="dFlag"></span><span id="dCountry">—</span></span></div>
+                <div class="row-line"><span class="k">Shahar</span><span class="v" id="dCity">—</span></div>
+                <div class="row-line"><span class="k">Provayder</span><span class="v" id="dOrg">—</span></div>
+            </div>
+
+            <!-- ===== LEGEND ===== -->
+            <div class="legend">
+                <div class="item"><span class="dot" style="background:#4dabf7"></span> Chiqish nuqtasi (Server)</div>
+                <div class="item"><span class="dot" style="background:#4caf50"></span> Yangi qo'shilgan o'q</div>
+                <div class="item"><span class="dot" style="background:rgba(255,255,255,0.4)"></span> Oldingi trafik</div>
+            </div>
+
+            <!-- ===== EMPTY STATE ===== -->
+            <div class="empty-state" id="emptyState">
+                <i class="zmdi zmdi-globe-alt"></i>
+                <h5 class="mt-2">Bu kun uchun ma'lumot yo'q</h5>
+                <p>Boshqa sanani tanlang yoki bir muncha vaqt kuting</p>
+            </div>
+
+            <!-- ===== GLOBE ===== -->
+            <div id="globeViz"></div>
+
+            <!-- ===== TIMELINE ===== -->
+            <div class="timeline-wrap">
+                <div class="timeline-top">
+                    <div class="timeline-time" id="tlTime">--:--</div>
+                    <div class="timeline-controls">
+                        <input type="date" class="date-input" id="dateInput">
+                        <button id="btnBack">◄ 15dq</button>
+                        <button id="btnPlay">⏸ Pauza</button>
+                        <button id="btnForward">15dq ►</button>
+                        <button id="btnLive">● Boshiga</button>
+                    </div>
+                </div>
+                <div class="timeline-slider" id="tlSlider">
+                    <div class="timeline-progress" id="tlProgress"></div>
+                    <div class="timeline-marker" id="tlMarker"></div>
+                </div>
+                <div class="timeline-labels">
+                    <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+                </div>
+            </div>
+
+            <!-- ===== LOADING ===== -->
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="spinner-border" role="status"></div>
+                <h6 class="mt-3">Xarita tayyorlanmoqda...</h6>
+                <p class="text-muted small" id="loadingSub">Ma'lumot yuklanmoqda</p>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/three@0.152.0/build/three.min.js"></script>
+<script src="https://unpkg.com/globe.gl@2.32.0/dist/globe.gl.min.js"></script>
+<script>
+(function() {
+    const ORIGIN = {
+        lat:   {{ origin.lat }},
+        lng:   {{ origin.lng }},
+        label: "{{ origin.label }}"
+    };
+
+    // ==============================================================
+    // GLOBUS ni sozlash
+    // ==============================================================
+    const globeEl = document.getElementById('globeViz');
+    const globe = Globe()(globeEl)
+        .backgroundColor('rgba(0,0,0,0)')
+        .globeImageUrl('https://unpkg.com/three-globe@2.31.0/example/img/earth-night.jpg')
+        .bumpImageUrl('https://unpkg.com/three-globe@2.31.0/example/img/earth-topology.png')
+        .showAtmosphere(true)
+        .atmosphereColor('#4dabf7')
+        .atmosphereAltitude(0.18)
+        .pointOfView({ lat: ORIGIN.lat, lng: ORIGIN.lng, altitude: 2.2 }, 0);
+
+    // Sekin aylanish (foydalanuvchi drag qilmaguncha)
+    let autoRotate = true;
+    globe.controls().autoRotate = true;
+    globe.controls().autoRotateSpeed = 0.35;
+    globe.controls().enableDamping = true;
+
+    // Foydalanuvchi ushlaganda avto-aylanish to'xtaydi
+    globeEl.addEventListener('pointerdown', () => {
+        autoRotate = false;
+        globe.controls().autoRotate = false;
+    });
+
+    // Origin nuqtasini sozlash
+    globe
+        .pointsData([{ ...ORIGIN, size: 0.6, color: '#4dabf7' }])
+        .pointLat('lat').pointLng('lng').pointColor('color')
+        .pointAltitude(0.02).pointRadius(0.5).pointsMerge(false);
+
+    // Arc konfiguratsiyasi
+    globe
+        .arcColor('color')
+        .arcAltitudeAutoScale(0.35)
+        .arcStroke(0.4)
+        .arcDashLength(0.4)
+        .arcDashGap(0.15)
+        .arcDashAnimateTime(3000)
+        .arcLabel(d => d.tooltip)
+        .onArcClick(arc => openDetail(arc.raw))
+        .onArcHover(arc => globeEl.style.cursor = arc ? 'pointer' : 'grab');
+
+    // Fon dumaloq nuqtalar
+    globe
+        .ringLat(d => d.lat).ringLng(d => d.lng)
+        .ringColor(() => t => `rgba(77,171,247,${1 - t})`)
+        .ringMaxRadius(2)
+        .ringPropagationSpeed(1.5)
+        .ringRepeatPeriod(1200);
+
+    globe.ringsData([{ lat: ORIGIN.lat, lng: ORIGIN.lng }]);
+
+    // Responsive
+    function resizeGlobe() {
+        const rect = globeEl.getBoundingClientRect();
+        globe.width(rect.width).height(rect.height);
+    }
+    resizeGlobe();
+    window.addEventListener('resize', resizeGlobe);
+
+    // ==============================================================
+    // MA'LUMOT YUKLASH + ANIMATSIYA MOTORI
+    // ==============================================================
+    let allActivities = [];   // {ts, geo, hostname, ...}
+    let arcQueue = [];        // hozir globusda ko'rinayotgan arc lar
+    let arcSeen = 0;          // playback pozitsiyasi (indeks)
+    let playing = true;
+    let dayStart = null, dayEnd = null;
+    let selectedDate = null;
+
+    const MAX_LIVE_ARCS = 5;      // Bir vaqtda maksimum 5 arc
+    const ARC_LIFETIME_MS = 6000;
+    const TICK_INTERVAL_MS = 2000; // Har 2 sekundda yangi arc
+
+    // Rang palitrasi (ketma-ket rang beriladi)
+    const ARC_COLORS = ['#4caf50', '#4dabf7', '#ff9800', '#e91e63', '#9c27b0', '#00bcd4'];
+    let colorIdx = 0;
+    const nextColor = () => { const c = ARC_COLORS[colorIdx % ARC_COLORS.length]; colorIdx++; return c; };
+
+    // Country -> flag emoji
+    function flagEmoji(code) {
+        if (!code || code.length !== 2) return '🌐';
+        const cc = code.toUpperCase();
+        return String.fromCodePoint(...[...cc].map(c => 127397 + c.charCodeAt(0)));
+    }
+
+    function fmtTime(iso) {
+        try {
+            const d = new Date(iso);
+            return d.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+        } catch { return '—'; }
+    }
+    function fmtDur(sec) {
+        sec = sec | 0;
+        if (sec < 60) return sec + ' sekund';
+        const m = Math.floor(sec/60), s = sec%60;
+        return `${m} dq ${s} sek`;
+    }
+
+    // Arc yaratish
+    function buildArc(activity) {
+        const c = nextColor();
+        return {
+            startLat: ORIGIN.lat, startLng: ORIGIN.lng,
+            endLat:   activity.geo.lat, endLng: activity.geo.lng,
+            color:    [c, c + '77'],       // gradient (asos → shaffof)
+            tooltip:  `${activity.hostname} → ${activity.domain}`,
+            raw:      activity,
+            createdAt: Date.now(),
+        };
+    }
+
+    // ==============================================================
+    // TIMELINE + PLAYBACK LOOP
+    // ==============================================================
+    const tlProgress = document.getElementById('tlProgress');
+    const tlMarker   = document.getElementById('tlMarker');
+    const tlSlider   = document.getElementById('tlSlider');
+    const tlTime     = document.getElementById('tlTime');
+
+    function setPlaybackTime(ms, updateArcs=false) {
+        if (!dayStart || !dayEnd) return;
+        const total = dayEnd - dayStart;
+        const rel = Math.max(0, Math.min(total, ms - dayStart));
+        const pct = (rel / total) * 100;
+        tlProgress.style.width  = pct + '%';
+        tlMarker.style.left     = pct + '%';
+        const d = new Date(ms);
+        tlTime.textContent = d.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+
+        if (updateArcs) {
+            // Slider dragging paytida — hamma arc larni tozalaymiz va yangi indeks belgilaymiz
+            arcQueue = [];
+            arcSeen = 0;
+            for (let i = 0; i < allActivities.length; i++) {
+                const t = new Date(allActivities[i].ts).getTime();
+                if (t <= ms) arcSeen = i + 1;
+                else break;
+            }
+            // Faqat oxirgi MAX_LIVE_ARCS ni ko'rsatamiz
+            const start = Math.max(0, arcSeen - MAX_LIVE_ARCS);
+            arcQueue = allActivities.slice(start, arcSeen).map(a => buildArc(a));
+            renderArcs();
+        }
+    }
+
+    function renderArcs() {
+        globe.arcsData(arcQueue);
+        document.getElementById('statLive').textContent = arcQueue.length;
+    }
+
+    function tick() {
+        if (!playing || !allActivities.length) return;
+
+        // Keyingi activity ni qo'shamiz
+        if (arcSeen < allActivities.length) {
+            const a = allActivities[arcSeen];
+            arcQueue.push(buildArc(a));
+            arcSeen++;
+
+            // Timeline ni ushbu vaqtga sinxronlaymiz
+            setPlaybackTime(new Date(a.ts).getTime());
+        } else {
+            // Kun tugadi — timeline ni oxiriga qo'yamiz
+            if (dayEnd) setPlaybackTime(dayEnd);
+        }
+
+        // Eski arc larni tozalaymiz
+        const now = Date.now();
+        arcQueue = arcQueue.filter(a => (now - a.createdAt) < ARC_LIFETIME_MS);
+        // Yoki max cap
+        while (arcQueue.length > MAX_LIVE_ARCS) arcQueue.shift();
+
+        renderArcs();
+    }
+    setInterval(tick, TICK_INTERVAL_MS);
+
+    // Timeline slider — drag qilib jump qilish
+    tlSlider.addEventListener('click', function(e) {
+        if (!dayStart || !dayEnd) return;
+        const rect = tlSlider.getBoundingClientRect();
+        const pct = (e.clientX - rect.left) / rect.width;
+        const ms = dayStart + pct * (dayEnd - dayStart);
+        setPlaybackTime(ms, true);
+    });
+
+    // Play/Pause
+    document.getElementById('btnPlay').addEventListener('click', function() {
+        playing = !playing;
+        this.textContent = playing ? '⏸ Pauza' : '▶ Davom';
+        this.classList.toggle('active', !playing);
+    });
+    // Boshiga
+    document.getElementById('btnLive').addEventListener('click', function() {
+        arcQueue = []; arcSeen = 0;
+        if (dayStart) setPlaybackTime(dayStart);
+        renderArcs();
+        playing = true;
+        const p = document.getElementById('btnPlay');
+        p.textContent = '⏸ Pauza'; p.classList.remove('active');
+    });
+    document.getElementById('btnBack').addEventListener('click', function() {
+        if (!dayStart) return;
+        const cur = parseFloat(tlMarker.style.left) / 100;
+        const ms = dayStart + (cur * (dayEnd - dayStart)) - 15*60*1000;
+        setPlaybackTime(Math.max(dayStart, ms), true);
+    });
+    document.getElementById('btnForward').addEventListener('click', function() {
+        if (!dayEnd) return;
+        const cur = parseFloat(tlMarker.style.left) / 100;
+        const ms = dayStart + (cur * (dayEnd - dayStart)) + 15*60*1000;
+        setPlaybackTime(Math.min(dayEnd, ms), true);
+    });
+
+    // ==============================================================
+    // DETAIL PANEL
+    // ==============================================================
+    const dPanel = document.getElementById('detailPanel');
+    window.openDetail = function(a) {
+        document.getElementById('dDomain').textContent = a.domain;
+        document.getElementById('dUrl').textContent    = a.url;
+        document.getElementById('dHost').textContent   = a.hostname;
+        document.getElementById('dApp').textContent    = a.app;
+        document.getElementById('dTitle').textContent  = a.title || '—';
+        document.getElementById('dTs').textContent     = fmtTime(a.ts);
+        document.getElementById('dDuration').textContent = fmtDur(a.duration);
+        document.getElementById('dIp').textContent     = a.geo.ip || '—';
+        document.getElementById('dFlag').textContent   = flagEmoji(a.geo.country_code);
+        document.getElementById('dCountry').textContent = a.geo.country || '—';
+        document.getElementById('dCity').textContent   = a.geo.city || '—';
+        document.getElementById('dOrg').textContent    = a.geo.org || '—';
+        dPanel.classList.add('open');
+        // Ko'zdan uchirmasdan globusni destinationga aylantiramiz
+        autoRotate = false; globe.controls().autoRotate = false;
+        globe.pointOfView({ lat: a.geo.lat, lng: a.geo.lng, altitude: 1.6 }, 900);
+    };
+    window.closeDetail = function() {
+        dPanel.classList.remove('open');
+    };
+
+    // ==============================================================
+    // SEARCH
+    // ==============================================================
+    const searchIn = document.getElementById('searchInput');
+    const searchRes = document.getElementById('searchResults');
+
+    searchIn.addEventListener('input', function() {
+        const q = this.value.trim().toLowerCase();
+        if (!q) { searchRes.classList.remove('show'); return; }
+        const matches = allActivities.filter(a =>
+            (a.domain && a.domain.toLowerCase().includes(q)) ||
+            (a.hostname && a.hostname.toLowerCase().includes(q)) ||
+            (a.geo.country && a.geo.country.toLowerCase().includes(q)) ||
+            (a.geo.city && a.geo.city.toLowerCase().includes(q))
+        ).slice(0, 30);
+
+        if (!matches.length) {
+            searchRes.innerHTML = '<div class="r-item" style="color:#6c7a94">Topilmadi</div>';
+        } else {
+            searchRes.innerHTML = matches.map(a => `
+                <div class="r-item" data-id="${a.id}">
+                    <div class="d">${flagEmoji(a.geo.country_code)} ${a.domain}</div>
+                    <div class="m">${a.hostname} · ${a.geo.country} · ${fmtTime(a.ts)}</div>
+                </div>
+            `).join('');
+            searchRes.querySelectorAll('.r-item[data-id]').forEach(el => {
+                el.addEventListener('click', function() {
+                    const a = allActivities.find(x => x.id === this.dataset.id);
+                    if (a) openDetail(a);
+                    searchRes.classList.remove('show');
+                });
+            });
+        }
+        searchRes.classList.add('show');
+    });
+    document.addEventListener('click', function(e) {
+        if (!searchIn.contains(e.target) && !searchRes.contains(e.target)) {
+            searchRes.classList.remove('show');
+        }
+    });
+
+    // ==============================================================
+    // DATA FETCH
+    // ==============================================================
+    function loadData(dateStr) {
+        document.getElementById('loadingOverlay').classList.remove('hide');
+        document.getElementById('loadingSub').textContent = 'IP → geo hal qilinmoqda...';
+
+        fetch(`{% url 'external_connections_data' %}?date=${dateStr}`)
+            .then(r => r.json())
+            .then(data => {
+                allActivities = data.arcs || [];
+                selectedDate = data.date;
+                document.getElementById('dateLabel').textContent = selectedDate;
+
+                // Bir kunning boshi va oxiri
+                const [y, m, d] = selectedDate.split('-').map(Number);
+                dayStart = new Date(y, m-1, d, 0, 0, 0).getTime();
+                dayEnd   = new Date(y, m-1, d, 23, 59, 59).getTime();
+
+                // Statistika
+                document.getElementById('statTotal').textContent = allActivities.length;
+                const countries = new Set(allActivities.map(a => a.geo.country).filter(Boolean));
+                document.getElementById('statCountries').textContent = countries.size;
+
+                // Reset state
+                arcQueue = [];
+                arcSeen = 0;
+                colorIdx = 0;
+                setPlaybackTime(dayStart);
+                renderArcs();
+
+                document.getElementById('emptyState').classList.toggle('show', !allActivities.length);
+                document.getElementById('loadingOverlay').classList.add('hide');
+            })
+            .catch(err => {
+                document.getElementById('loadingSub').textContent = 'Xatolik: ' + err.message;
+            });
+    }
+
+    // Date input — kun tanlash
+    const dateInput = document.getElementById('dateInput');
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    dateInput.value = todayStr;
+    dateInput.max   = todayStr;
+    dateInput.addEventListener('change', function() {
+        loadData(this.value);
+    });
+
+    // Initial load
+    loadData(todayStr);
+})();
+</script>
+
+{% endblock %}

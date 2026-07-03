@@ -53,3 +53,4 @@ zope.interface==8.2
 gunicorn>=21.2.0
 asyncpg>=0.29.0
 django-cleanup>=8.1.0
+requests>=2.31.0

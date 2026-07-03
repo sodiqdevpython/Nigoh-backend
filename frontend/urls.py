@@ -30,6 +30,10 @@ urlpatterns = [
     # App icons — dastur logotiplari JSON (DB dagi)
     path('app-icons.json', v.app_icons_json, name='app_icons_json'),
 
+    # Tashqariga chiqishlar — 3D globus
+    path('external-connections/', v.external_connections_view, name='external_connections'),
+    path('external-connections/data.json', v.external_connections_data_json, name='external_connections_data'),
+
     # Broadcast (screen share)
     path('broadcast/start/', v.broadcast_start_view, name='broadcast_start'),
     path('broadcast/agent-url/<uuid:session_id>/', v.broadcast_agent_url_view, name='broadcast_agent_url'),
