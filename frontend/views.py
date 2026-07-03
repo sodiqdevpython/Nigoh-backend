@@ -947,7 +947,7 @@ def blocked_processes_view(request):
 # Har bino uchun alohida chiqish nuqtasi. Building qiymatlari:
 # 1=A, 2=B, 3=C, 4=D (endpoints/choices.py dagi BuildingNumber ga mos)
 BUILDING_ORIGINS = {
-    1: {'lat': 41.375112, 'lng': 69.269483, 'label': 'A bino'},
+    1: {'lat': 41.375160, 'lng': 69.269508, 'label': 'A bino'},
     2: {'lat': 41.374635, 'lng': 69.268619, 'label': 'B bino'},
     3: {'lat': 41.374338, 'lng': 69.268166, 'label': 'C bino'},
     4: {'lat': 41.373881, 'lng': 69.267422, 'label': 'D bino'},
