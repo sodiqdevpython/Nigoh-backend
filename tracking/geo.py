@@ -12,6 +12,7 @@ Foydalanish:
     # result → {'youtube.com': {...}, ...}
 """
 import socket
+from datetime import timedelta
 from urllib.parse import urlparse
 
 try:
@@ -22,6 +23,12 @@ except ImportError:
 from django.utils import timezone
 
 from .models import URLGeoCache
+
+# Cache retention — 30 kundan eski yozuvlar o'chiriladi (avtomatik)
+CACHE_RETENTION_DAYS = 30
+
+# 24 soatda 1 marta tozalash (avtomatik cleanup throttle)
+_LAST_CLEANUP_AT = None
 
 
 IP_API_URL = "http://ip-api.com/json/{ip}?fields=status,country,countryCode,city,lat,lon,org"
@@ -53,9 +60,14 @@ def extract_domain(url):
 def _dns_lookup(domain):
     """Domain -> IP. Xato bo'lsa None."""
     try:
+        # setdefaulttimeout globaldir — buni faqat lokal sockettimeout qilib emas,
+        # gethostbyname'ning ichki timeout'ini yoqib qo'yamiz. 3s yetadi.
         socket.setdefaulttimeout(3.0)
-        return socket.gethostbyname(domain)
-    except Exception:
+        ip = socket.gethostbyname(domain)
+        print(f"[dns] {domain} -> {ip}")
+        return ip
+    except Exception as e:
+        print(f"[dns FAIL] {domain}: {e}")
         return None
 
 
@@ -65,13 +77,14 @@ def _geo_lookup(ip):
         print("[geo_lookup] requests paketi o'rnatilmagan — pip install requests")
         return None
     try:
-        r = requests.get(IP_API_URL.format(ip=ip), timeout=4)
+        r = requests.get(IP_API_URL.format(ip=ip), timeout=5)
         if r.status_code != 200:
+            print(f"[geo FAIL] {ip}: HTTP {r.status_code}")
             return None
         data = r.json()
         if data.get('status') != 'success':
             return None
-        return {
+        result = {
             'country':      data.get('country', ''),
             'country_code': data.get('countryCode', ''),
             'city':         data.get('city', ''),
@@ -79,7 +92,10 @@ def _geo_lookup(ip):
             'lng':          data.get('lon'),
             'org':          data.get('org', ''),
         }
-    except Exception:
+        print(f"[geo] {ip} -> {result['country']}/{result['city']}")
+        return result
+    except Exception as e:
+        print(f"[geo FAIL] {ip}: {e}")
         return None
 
 
@@ -163,20 +179,48 @@ def resolve_url(url):
     return resolve_domain(domain)
 
 
-def resolve_domains_bulk(domains, max_new=10):
+def cleanup_old_cache(days=None):
+    """
+    30 kundan eski yozuvlarni o'chiradi (FIFO).
+    Qaytishi: o'chirilgan yozuvlar soni.
+    """
+    if days is None:
+        days = CACHE_RETENTION_DAYS
+    cutoff = timezone.now() - timedelta(days=days)
+    deleted, _ = URLGeoCache.objects.filter(updated_at__lt=cutoff).delete()
+    if deleted:
+        print(f"[cache cleanup] {deleted} ta eski yozuv o'chirildi (> {days} kun)")
+    return deleted
+
+
+def _maybe_run_cleanup():
+    """Har 24 soatda bir marta avtomatik cleanup (in-memory throttle)."""
+    global _LAST_CLEANUP_AT
+    now = timezone.now()
+    if _LAST_CLEANUP_AT and (now - _LAST_CLEANUP_AT).total_seconds() < 86400:
+        return
+    try:
+        cleanup_old_cache()
+    except Exception as e:
+        print(f"[cache cleanup xato] {e}")
+    _LAST_CLEANUP_AT = now
+
+
+def resolve_domains_bulk(domains, max_new=40, retry_failed=True):
     """
     Bir vaqtda ko'p domain lar uchun geo qaytaradi.
-    Cache dan olib beradi. `max_new` — bir chaqiriqda maks. nechta yangi domain
-    hal qilinadi (rate limitni himoya qilish uchun).
-
-    Returns: {domain: {ip, lat, lng, country, city, ...} | None}
+    `max_new` — bir chaqiriqda maks. nechta YANGI/FAIL domain qayta hal qilinadi.
+    `retry_failed=True` bo'lsa avval fail bo'lganlar qayta sinaladi.
     """
     domains = list({d for d in domains if d})
     if not domains:
         return {}
 
-    # Cache dan bor bo'lganlarni oldindan olamiz
+    # 24 soatda 1 marta eski yozuvlarni tozalash
+    _maybe_run_cleanup()
+
     caches = {c.domain: c for c in URLGeoCache.objects.filter(domain__in=domains)}
+    print(f"[bulk] {len(domains)} domain, {len(caches)} cache, retry_failed={retry_failed}")
 
     result = {}
     new_count = 0
@@ -184,14 +228,20 @@ def resolve_domains_bulk(domains, max_new=10):
         c = caches.get(d)
         if c and not c.failed and c.latitude is not None:
             result[d] = _serialize(c)
-        elif c and c.failed:
-            result[d] = None
-        else:
-            # Cache yo'q — hal qilamiz (lekin max_new limitidan oshmasin)
-            if new_count >= max_new:
-                result[d] = None
-                continue
-            result[d] = resolve_domain(d)
-            new_count += 1
+            continue
 
+        # Cache yo'q yoki failed — qayta hal qilamiz
+        if new_count >= max_new:
+            result[d] = _serialize(c) if c else None
+            continue
+
+        # retry_failed=False va failed cache bor bo'lsa — o'tkazib yuboramiz
+        if c and c.failed and not retry_failed:
+            result[d] = None
+            continue
+
+        result[d] = resolve_domain(d, force=True)
+        new_count += 1
+
+    print(f"[bulk] hal qilingan yangi: {new_count}, jami muvaffaqiyatli: {sum(1 for v in result.values() if v)}")
     return result

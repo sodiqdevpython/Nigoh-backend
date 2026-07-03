@@ -1005,7 +1005,7 @@ def external_connections_data_json(request):
 
         unique_domains = list(set(domain_map.values()))
         try:
-            geo_map = resolve_domains_bulk(unique_domains, max_new=15)
+            geo_map = resolve_domains_bulk(unique_domains, max_new=40)
         except Exception as e:
             print(f"[external_connections geo bulk xato] {e}")
             traceback.print_exc()
