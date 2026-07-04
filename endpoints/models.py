@@ -84,8 +84,7 @@ class Computer(BaseModel):
     # Oddiy administratorlar detail sahifasiga kirsa ogohlantirish chiqadi.
     is_whitelisted = models.BooleanField(
         default=False,
-        verbose_name="Whitelist (faqat superadmin ko'ra oladi)",
-        help_text="Belgilangan bo'lsa — faqat superuser bu PC faoliyatini ko'radi",
+        verbose_name="Whitelist"
     )
 
     # Eng oxirgi olingan ekranshot (faqat 1 ta saqlanadi — yangi kelsa eski o'chadi).
