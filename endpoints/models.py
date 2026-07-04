@@ -128,7 +128,7 @@ class WhitelistedComputer(BaseModel):
     class Meta:
         ordering = ['-created_at']
         verbose_name = "Whitelist yozuvi"
-        verbose_name_plural = "Whitelist — faqat superadmin ko'radi"
+        verbose_name_plural = "Whitelist"
 
     def __str__(self):
         return f"{self.computer.hostname or self.computer.device_id} — whitelist"

@@ -221,6 +221,9 @@ def create_remote_session_view(request, bios_uuid):
         computer = Computer.objects.filter(
             Q(device_id=bios_uuid) | Q(bios_uuid=bios_uuid)
         ).first()
+        # Whitelist himoyasi
+        if computer and computer.is_whitelisted and not request.user.is_superuser:
+            return JsonResponse({"error": "Bu qurilma bloklangan"}, status=403)
         if not computer:
             return JsonResponse({"error": "Kompyuter topilmadi"}, status=404)
 
@@ -535,6 +538,9 @@ def group_command_view(request, pk):
         ).first()
         if not computer:
             return JsonResponse({'error': 'PC topilmadi', 'sent': 0}, status=404)
+        # Whitelist himoyasi — faqat superuser buyruq yubora oladi
+        if computer.is_whitelisted and not request.user.is_superuser:
+            return JsonResponse({'error': 'Bu qurilma bloklangan', 'sent': 0}, status=403)
         if not computer.is_online:
             return JsonResponse({'error': 'Bu PC oflayn', 'sent': 0})
         async_to_sync(channel_layer.group_send)(
@@ -543,11 +549,29 @@ def group_command_view(request, pk):
         )
         sent = 1
     else:
-        online_count = Computer.objects.filter(group=group, is_online=True).count()
-        async_to_sync(channel_layer.group_send)(
-            f'group_{pk}',
-            {'type': 'execute_command', 'data': {'type': 'do_command', 'action': shell_cmd, 'message': '', 'payload': {}}}
-        )
+        # Guruh bo'yicha broadcast: whitelist PC lar yashirin (oddiy admin uchun).
+        # Guruh WS kanaliga yuborish — whitelist PC ham qabul qiladi (channel'da sit).
+        # Shuning uchun agar oddiy user bo'lsa — har PCga alohida individual yuboramiz
+        # (whitelist ni exclude qilib).
+        if request.user.is_superuser:
+            # Superuser — guruh channel'ga bir marta yuboradi (hozirgi mantiq)
+            online_count = Computer.objects.filter(group=group, is_online=True).count()
+            async_to_sync(channel_layer.group_send)(
+                f'group_{pk}',
+                {'type': 'execute_command', 'data': {'type': 'do_command', 'action': shell_cmd, 'message': '', 'payload': {}}}
+            )
+        else:
+            # Oddiy admin — whitelist bo'lmaganlarga bittalab
+            visible = Computer.objects.filter(
+                group=group, is_online=True, is_whitelisted=False
+            )
+            online_count = visible.count()
+            for pc in visible:
+                async_to_sync(channel_layer.group_send)(
+                    f'pc_{_computer_key(pc)}',
+                    {'type': 'execute_command',
+                     'data': {'type': 'do_command', 'action': shell_cmd, 'message': '', 'payload': {}}}
+                )
         sent = online_count
 
     return JsonResponse({'status': 'ok', 'sent': sent})
@@ -559,6 +583,9 @@ def device_command_view(request, pk):
         return JsonResponse({'error': 'POST only'}, status=405)
 
     computer = get_object_or_404(Computer, id=pk)
+    # Whitelist himoyasi
+    if computer.is_whitelisted and not request.user.is_superuser:
+        return JsonResponse({'error': 'Bu qurilma bloklangan', 'sent': 0}, status=403)
     if not computer.is_online:
         return JsonResponse({'error': 'Qurilma oflayn', 'sent': 0})
 
@@ -627,6 +654,9 @@ def request_screenshot_view(request, pk):
         return JsonResponse({'error': 'POST only'}, status=405)
 
     computer = get_object_or_404(Computer, id=pk)
+    # Whitelist himoyasi
+    if computer.is_whitelisted and not request.user.is_superuser:
+        return JsonResponse({'error': 'Bu qurilma bloklangan'}, status=403)
     if not computer.is_online:
         return JsonResponse({'error': 'Bu PC oflayn'}, status=400)
 
@@ -852,6 +882,9 @@ def group_stats_view(request, pk):
         return kw
 
     computers = Computer.objects.filter(group=group)
+    # Whitelist — statistikadan ham yashiriladi (top saytlar/dasturlar)
+    if not request.user.is_superuser:
+        computers = computers.filter(is_whitelisted=False)
 
     tf = _time_filter_kwargs()
 

@@ -6,9 +6,8 @@ from django.conf.urls.static import static
 # ============================================================
 # Admin panel branding
 # ============================================================
-admin.site.site_header = "Nigoh — Boshqaruv paneli"
+admin.site.site_header = "Nigoh — Admin"
 admin.site.site_title  = "Nigoh Admin"
-admin.site.index_title = "Boshqaruv paneliga xush kelibsiz"
 
 # Swagger uchun importlar
 from rest_framework import permissions
