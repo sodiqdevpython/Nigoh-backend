@@ -89,7 +89,9 @@
                                 {% else %}
                                     <small class="text-danger"><i class="zmdi zmdi-circle-o mr-1"></i> Oflayn</small>
                                 {% endif %}
-                                
+                                {% if comp.is_whitelisted %}
+                                    <small style="color:#ff5252;" title="Faqat superadmin ko'ra oladi"><i class="zmdi zmdi-lock mr-1"></i> Whitelist</small>
+                                {% endif %}
                             </div>
                         </div>
                     </div>

@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login as auth_login
 from django.contrib import messages
@@ -285,6 +286,12 @@ def check_session_status_view(request, session_id):
 def device_detail_view(request, pk):
     computer = get_object_or_404(Computer, id=pk)
 
+    # Whitelist tekshiruvi — faqat superuser ko'ra oladi
+    if computer.is_whitelisted and not request.user.is_superuser:
+        return render(request, 'menu/device/whitelist_blocked.html', {
+            'computer_hostname': computer.hostname or 'Nomsiz',
+        }, status=403)
+
     if request.GET.get('metrics_only') == '1':
         return JsonResponse(LIVE_METRICS.get(_computer_key(computer)) or {})
 
@@ -425,6 +432,10 @@ def group_detail_view(request, pk):
     group = get_object_or_404(Group, id=pk)
     computers = Computer.objects.filter(group=group).order_by('hostname')
 
+    # Whitelist PC lar faqat superuser'ga ko'rinadi
+    if not request.user.is_superuser:
+        computers = computers.filter(is_whitelisted=False)
+
     total_count = computers.count()
     online_count = computers.filter(is_online=True).count()
 
@@ -441,8 +452,16 @@ def group_detail_view(request, pk):
 
 def group_metrics_view(request, pk):
     group = get_object_or_404(Group, id=pk)
-    computers = Computer.objects.filter(group=group).values(
-        'device_id', 'bios_uuid', 'hostname', 'is_online', 'id', 'ram_gb', 'last_seen'
+    # Screenshot URL uchun to'liq Computer obyektlarini olib kelamiz
+    computers_qs = Computer.objects.filter(group=group)
+
+    # Whitelist filter — superadmin bo'lmasa yashiramiz
+    if not request.user.is_superuser:
+        computers_qs = computers_qs.filter(is_whitelisted=False)
+
+    computers = computers_qs.values(
+        'device_id', 'bios_uuid', 'hostname', 'is_online', 'id',
+        'ram_gb', 'last_seen', 'last_screenshot', 'last_screenshot_at',
     )
 
     result = {}
@@ -458,12 +477,18 @@ def group_metrics_view(request, pk):
         # Kalit — device_id afzal (yangi agentlar), bios_uuid fallback (eski)
         key = pc['device_id'] or pc['bios_uuid']
 
+        # Screenshot URL
+        screenshot_url = None
+        if pc['last_screenshot']:
+            screenshot_url = settings.MEDIA_URL + pc['last_screenshot']
+
         result[key] = {
             'hostname':  pc['hostname'],
             'is_online': pc['is_online'],
             'pk':        pc['id'],
             'ram_gb':    float(pc['ram_gb'] or 0),
             'last_seen': last_seen_str,
+            'screenshot_url': screenshot_url,
             'metrics':   LIVE_METRICS.get(key) or {},
         }
     online_total = sum(1 for v in result.values() if v['is_online'])
@@ -780,41 +805,77 @@ def broadcast_status_view(request, session_id):
 def group_stats_view(request, pk):
     group = get_object_or_404(Group, id=pk)
     time_filter = request.GET.get('time', 'today')
+    date_from_str = request.GET.get('date_from', '').strip()
+    date_to_str = request.GET.get('date_to', '').strip()
 
     now = timezone.now()
-    if time_filter == 'week':
+    end = None   # cheklovsiz (hozirgi vaqtgacha)
+
+    if time_filter == 'range' and (date_from_str or date_to_str):
+        try:
+            if date_from_str:
+                d = datetime.strptime(date_from_str, '%Y-%m-%d')
+                start = timezone.make_aware(d.replace(hour=0, minute=0, second=0, microsecond=0))
+            else:
+                start = timezone.make_aware(datetime(1970, 1, 1))
+            if date_to_str:
+                d = datetime.strptime(date_to_str, '%Y-%m-%d')
+                end = timezone.make_aware(d.replace(hour=23, minute=59, second=59, microsecond=999999))
+            label = f"{date_from_str or 'boshidan'} — {date_to_str or 'bugungacha'}"
+        except ValueError:
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            label = 'Bugun'
+    elif time_filter == 'week':
         start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
         label = 'Shu hafta'
+    elif time_filter == 'month':
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        label = 'Shu oy'
+    elif time_filter == 'last7':
+        start = (now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
+        label = 'Oxirgi 7 kun'
+    elif time_filter == 'last30':
+        start = (now - timedelta(days=30)).replace(hour=0, minute=0, second=0, microsecond=0)
+        label = 'Oxirgi 30 kun'
+    elif time_filter == 'all':
+        start = timezone.make_aware(datetime(2000, 1, 1))
+        label = 'Butun tarix'
     else:
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         label = 'Bugun'
+        time_filter = 'today'
+
+    def _time_filter_kwargs():
+        kw = {'created_at__gte': start}
+        if end is not None:
+            kw['created_at__lte'] = end
+        return kw
 
     computers = Computer.objects.filter(group=group)
 
-    # Top web sahifalar — eng ko'p tashrif (count)
+    tf = _time_filter_kwargs()
+
     top_pages_count = (
         ActivityLog.objects
-        .filter(computer__in=computers, created_at__gte=start, url__isnull=False)
+        .filter(computer__in=computers, url__isnull=False, **tf)
         .exclude(url='')
         .values('url', 'title')
         .annotate(visits=Count('id'), total_sec=Sum('duration_seconds'))
         .order_by('-visits')[:10]
     )
 
-    # Top web sahifalar — eng ko'p vaqt (duration)
     top_pages_time = (
         ActivityLog.objects
-        .filter(computer__in=computers, created_at__gte=start, url__isnull=False)
+        .filter(computer__in=computers, url__isnull=False, **tf)
         .exclude(url='')
         .values('url', 'title')
         .annotate(total_sec=Sum('duration_seconds'), visits=Count('id'))
         .order_by('-total_sec')[:10]
     )
 
-    # Top dasturlar — eng ko'p vaqt
     top_apps = (
         AppUsageStatistic.objects
-        .filter(computer__in=computers, created_at__gte=start)
+        .filter(computer__in=computers, **tf)
         .values('app_name')
         .annotate(total_sec=Sum('active_seconds'))
         .order_by('-total_sec')[:10]
@@ -823,6 +884,8 @@ def group_stats_view(request, pk):
     context = {
         'group': group,
         'time_filter': time_filter,
+        'date_from': date_from_str,
+        'date_to': date_to_str,
         'label': label,
         'top_pages_count': top_pages_count,
         'top_pages_time': top_pages_time,
@@ -996,12 +1059,17 @@ def external_connections_data_json(request):
         start = timezone.make_aware(day)
         end   = start + timedelta(days=1)
 
+        # Whitelist PC lar faqat superuser'ga ko'rinadi
+        exclude_whitelisted = not request.user.is_superuser
+
         def _build_qs(range_start, range_end, limit=400):
-            return (ActivityLog.objects
-                    .filter(created_at__gte=range_start, created_at__lt=range_end)
-                    .exclude(url__isnull=True).exclude(url='')
-                    .select_related('computer', 'computer__group')
-                    .order_by('created_at')[:limit])
+            qs = (ActivityLog.objects
+                  .filter(created_at__gte=range_start, created_at__lt=range_end)
+                  .exclude(url__isnull=True).exclude(url=''))
+            if exclude_whitelisted:
+                qs = qs.exclude(computer__is_whitelisted=True)
+            return (qs.select_related('computer', 'computer__group')
+                      .order_by('created_at')[:limit])
 
         activities = list(_build_qs(start, end))
         fallback_used = False

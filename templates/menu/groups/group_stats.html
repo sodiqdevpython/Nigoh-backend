@@ -42,15 +42,43 @@
                             </div>
                         </div>
                         <!-- Filtr -->
-                        <div class="d-flex" style="gap:8px;">
+                        <div class="d-flex flex-wrap" style="gap:6px;">
                             <a href="?time=today" class="filter-btn {% if time_filter == 'today' %}active{% endif %}">
                                 <i class="zmdi zmdi-calendar-note mr-1"></i> Bugun
                             </a>
                             <a href="?time=week" class="filter-btn {% if time_filter == 'week' %}active{% endif %}">
-                                <i class="zmdi zmdi-calendar mr-1"></i> Shu hafta
+                                Shu hafta
+                            </a>
+                            <a href="?time=last7" class="filter-btn {% if time_filter == 'last7' %}active{% endif %}">
+                                Oxirgi 7 kun
+                            </a>
+                            <a href="?time=month" class="filter-btn {% if time_filter == 'month' %}active{% endif %}">
+                                Shu oy
+                            </a>
+                            <a href="?time=last30" class="filter-btn {% if time_filter == 'last30' %}active{% endif %}">
+                                Oxirgi 30 kun
+                            </a>
+                            <a href="?time=all" class="filter-btn {% if time_filter == 'all' %}active{% endif %}">
+                                <i class="zmdi zmdi-time-restore mr-1"></i> Butun tarix
                             </a>
                         </div>
                     </div>
+
+                    <!-- Custom range -->
+                    <form method="GET" class="mt-3 pt-3" style="border-top: 1px solid rgba(255,255,255,0.08);">
+                        <input type="hidden" name="time" value="range">
+                        <div class="d-flex align-items-center flex-wrap" style="gap:8px;">
+                            <span class="text-muted small">Yoki maxsus oralig'ni tanlang:</span>
+                            <input type="date" name="date_from" value="{{ date_from }}"
+                                   class="form-control form-control-sm"
+                                   style="background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.15);color:#fff;max-width:170px;">
+                            <span class="text-muted">—</span>
+                            <input type="date" name="date_to" value="{{ date_to }}"
+                                   class="form-control form-control-sm"
+                                   style="background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.15);color:#fff;max-width:170px;">
+                            <button type="submit" class="btn btn-sm btn-light"><i class="zmdi zmdi-search"></i> Qo'llash</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

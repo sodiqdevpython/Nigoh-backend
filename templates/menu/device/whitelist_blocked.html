@@ -1,0 +1,56 @@
+{% extends 'base/base.html' %}
+{% block content %}
+
+<style>
+    .block-card {
+        background: rgba(0, 0, 0, 0.55) !important;
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(220, 53, 69, 0.35);
+        border-radius: 12px;
+        padding: 48px 40px;
+        text-align: center;
+        color: #fff;
+    }
+    .block-card .icon-wrap {
+        width: 96px; height: 96px;
+        border-radius: 50%;
+        background: rgba(220, 53, 69, 0.12);
+        border: 2px solid rgba(220, 53, 69, 0.4);
+        display: flex; align-items: center; justify-content: center;
+        margin: 0 auto 24px;
+    }
+    .block-card .icon-wrap i { font-size: 44px; color: #ff5252; }
+    .block-card h4 { color: #fff; margin-bottom: 8px; font-weight: 400; }
+    .block-card .sub { color: #adb5bd; margin-bottom: 24px; }
+    .block-card .btn-back {
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.15);
+        color: #fff; padding: 10px 22px; border-radius: 6px;
+        display: inline-flex; align-items: center; gap: 8px;
+    }
+    .block-card .btn-back:hover { background: rgba(255,255,255,0.14); color: #fff; text-decoration: none; }
+</style>
+
+<div class="content-wrapper">
+    <div class="container-fluid">
+        <div class="row justify-content-center mt-5">
+            <div class="col-md-8 col-lg-6">
+                <div class="block-card">
+                    <div class="icon-wrap">
+                        <i class="zmdi zmdi-lock"></i>
+                    </div>
+                    <h4>Kirish taqiqlangan</h4>
+                    <p class="sub">
+                        Bu foydalanuvchi faoliyatini ko'rish admin tomonidan taqiqlangan.<br>
+                        <small class="text-muted">Qurilma: {{ computer_hostname }}</small>
+                    </p>
+                    <a href="{% url 'device_list' %}" class="btn-back">
+                        <i class="zmdi zmdi-arrow-left"></i> Qurilmalar ro'yxatiga qaytish
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

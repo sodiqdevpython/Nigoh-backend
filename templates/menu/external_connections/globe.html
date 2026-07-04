@@ -485,10 +485,11 @@
     controls.autoRotateSpeed = 0.4;
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 130;    // eng yaqin (baland aniqlik)
+    controls.minDistance = 130;
     controls.maxDistance = 500;
-    controls.rotateSpeed = 0.6;
-    controls.zoomSpeed = 0.8;
+    controls.rotateSpeed = 1.6;    // tezroq aylantirish — USA'ga o'tish oson
+    controls.zoomSpeed = 1.5;      // scroll zoom sezgirroq
+    controls.panSpeed = 1.2;
 
     let autoRotate = true;
     globeEl.addEventListener('pointerdown', () => {
@@ -501,13 +502,13 @@
         .pointLat('lat').pointLng('lng').pointColor('color')
         .pointAltitude(0.02).pointRadius(0.5);
 
-    // Ring pulse (chiqish nuqtasi)
+    // Ring pulse — origin ko'k, destination sariq (aniqlik radiusini bildiradi)
     globe
         .ringLat(d => d.lat).ringLng(d => d.lng)
-        .ringColor(() => t => `rgba(77,171,247,${1 - t})`)
-        .ringMaxRadius(2.5)
-        .ringPropagationSpeed(1.5)
-        .ringRepeatPeriod(1400);
+        .ringColor(d => t => d.__color ? d.__color(t) : `rgba(77,171,247,${1 - t})`)
+        .ringMaxRadius(d => d.__maxR || 2.5)
+        .ringPropagationSpeed(d => d.__speed || 1.5)
+        .ringRepeatPeriod(d => d.__period || 1400);
     globe.ringsData([{ lat: ORIGIN.lat, lng: ORIGIN.lng }]);
 
     // Arc konfig — click hitbox kengaytirilgan, harakat sekin
@@ -613,6 +614,25 @@
     function renderArcs() {
         globe.arcsData(arcQueue);
         document.getElementById('statLive').textContent = arcQueue.length;
+
+        // Origin ring'lar (barcha binolar) + aktiv destinationlar (sariq radius)
+        const originRings = (window.__ORIGIN_POINTS || [{lat: ORIGIN.lat, lng: ORIGIN.lng}]).map(o => ({
+            lat: o.lat, lng: o.lng,
+            __color: t => `rgba(77,171,247,${1 - t})`,
+            __maxR: 2, __speed: 1.5, __period: 1400,
+        }));
+
+        // Destination — IP geolokatsiya taxminan shahar aniqligida (10-50 km)
+        // Kattaroq radius bilan tarqalgan doira chizamiz
+        const destRings = arcQueue.map(arc => ({
+            lat: arc.endLat, lng: arc.endLng,
+            __color: t => `rgba(255,193,7,${(1 - t) * 0.75})`,
+            __maxR: 6,             // katta radius (~50 km taxminan)
+            __speed: 3,
+            __period: 2000,
+        }));
+
+        globe.ringsData(originRings.concat(destRings));
     }
 
     function tick() {
@@ -928,7 +948,7 @@
                     globe
                         .pointsData(originPoints)
                         .pointLabel(d => d.label);
-                    globe.ringsData(originPoints);
+                    window.__ORIGIN_POINTS = originPoints;
                 }
 
                 arcQueue = []; arcSeen = 0; colorIdx = 0;

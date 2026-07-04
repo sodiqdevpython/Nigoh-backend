@@ -78,6 +78,14 @@ class Computer(BaseModel):
     is_online = models.BooleanField(default=False)
     last_seen = models.DateTimeField(auto_now=True)
 
+    # Whitelist — bu qurilma faoliyatini FAQAT superuser ko'ra oladi.
+    # Oddiy administratorlar detail sahifasiga kirsa ogohlantirish chiqadi.
+    is_whitelisted = models.BooleanField(
+        default=False,
+        verbose_name="Whitelist (faqat superadmin ko'ra oladi)",
+        help_text="Belgilangan bo'lsa — faqat superuser bu PC faoliyatini ko'radi",
+    )
+
     # Eng oxirgi olingan ekranshot (faqat 1 ta saqlanadi — yangi kelsa eski o'chadi).
     # Device detail sahifasi ochilganda avtomatik so'raladi va shu maydonga yoziladi.
     last_screenshot = models.ImageField(

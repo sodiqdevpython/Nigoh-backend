@@ -32,6 +32,53 @@
     .pc-card.online  { border-left: 3px solid #4caf50; }
     .pc-card.offline { border-left: 3px solid rgba(255,82,82,0.5); }
 
+    /* PC SCREENSHOT PREVIEW */
+    .pc-thumb {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #0a0f1c;
+        border: 1px solid rgba(255,255,255,0.05);
+        margin-bottom: 10px;
+    }
+    .pc-thumb img {
+        width: 100%; height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    .pc-thumb .no-conn {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center;
+        color: #4a4f5c;
+    }
+    .pc-thumb .no-conn i { font-size: 32px; margin-bottom: 4px; }
+    .pc-thumb .no-conn span { font-size: 0.72rem; letter-spacing: 0.5px; }
+    .pc-thumb .offline-overlay {
+        position: absolute; inset: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0.15));
+        display: flex; justify-content: flex-end; padding: 6px;
+    }
+    .pc-thumb .offline-overlay .badge-off {
+        background: rgba(255,82,82,0.85);
+        color: #fff; padding: 2px 8px; border-radius: 10px;
+        font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .pc-thumb .live-indicator {
+        position: absolute; top: 6px; right: 6px;
+        background: rgba(0,0,0,0.55); color: #fff;
+        padding: 2px 8px; border-radius: 10px;
+        font-size: 0.65rem; display: flex; align-items: center; gap: 4px;
+        text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .pc-thumb .live-indicator .dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: #4caf50; box-shadow: 0 0 6px #4caf50;
+        animation: pulse-green 2s infinite;
+    }
+
     .pc-status-dot {
         width: 9px; height: 9px; border-radius: 50%;
         display: inline-block; margin-right: 5px;
@@ -217,6 +264,23 @@
                                  data-ram-gb="{{ pc.ram_gb|default:0 }}"
                                  data-last-seen="{{ pc.last_seen|date:'d.m.Y H:i' }}"
                                  onclick="window.location='{% url 'device_detail' pc.id %}'">
+
+                                <!-- SCREENSHOT PREVIEW -->
+                                <div class="pc-thumb" data-thumb-key="{{ pc.key }}">
+                                    {% if pc.last_screenshot %}
+                                        <img src="{{ pc.last_screenshot.url }}?t={{ pc.last_screenshot_at|date:'U' }}" alt="{{ pc.hostname }}">
+                                        {% if pc.is_online %}
+                                            <div class="live-indicator"><span class="dot"></span> Onlayn</div>
+                                        {% else %}
+                                            <div class="offline-overlay"><span class="badge-off">Oflayn</span></div>
+                                        {% endif %}
+                                    {% else %}
+                                        <div class="no-conn">
+                                            <i class="zmdi zmdi-desktop-mac"></i>
+                                            <span>No connection</span>
+                                        </div>
+                                    {% endif %}
+                                </div>
 
                                 <!-- Header -->
                                 <div class="d-flex justify-content-between align-items-start mb-2">
@@ -463,9 +527,13 @@ function sendCmd(command, targetUuid, scope) {
 function sendUrlCmd(targetUuid, scope) {
     var inputId = targetUuid ? 'single-url-input' : 'group-url-input';
     var url = document.getElementById(inputId).value.trim();
-    if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
-        showToast("To'g'ri URL kiriting (http:// yoki https://)", '#ff5252');
+    if (!url) {
+        showToast("URL kiriting", '#ff5252');
         return;
+    }
+    // Sxema yozilmagan bo'lsa https:// avtomatik qo'shiladi (backend ham dublikat qiladi)
+    if (!/^https?:\/\//i.test(url)) {
+        url = 'https://' + url;
     }
     var body = { command: 'open_url', url: url };
     if (targetUuid) body.target_uuid = targetUuid;
@@ -544,6 +612,27 @@ function updatePcCard(uuid, info) {
 
     var dot = card.querySelector('.pc-status-dot');
     if (dot) { dot.className = 'pc-status-dot ' + (isOnline ? 'dot-online' : 'dot-offline'); }
+
+    // Screenshot thumb — online belgisini yangilash
+    var thumb = card.querySelector('.pc-thumb');
+    if (thumb) {
+        var hasImg = !!thumb.querySelector('img');
+        // Overlaylarni tozalaymiz
+        thumb.querySelectorAll('.live-indicator, .offline-overlay').forEach(function(el){ el.remove(); });
+        if (hasImg) {
+            if (isOnline) {
+                var live = document.createElement('div');
+                live.className = 'live-indicator';
+                live.innerHTML = '<span class="dot"></span> Onlayn';
+                thumb.appendChild(live);
+            } else {
+                var off = document.createElement('div');
+                off.className = 'offline-overlay';
+                off.innerHTML = '<span class="badge-off">Oflayn</span>';
+                thumb.appendChild(off);
+            }
+        }
+    }
 
     var metricsDiv = card.querySelector('.pc-metrics');
     if (!metricsDiv) return;
