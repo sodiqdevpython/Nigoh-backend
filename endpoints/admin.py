@@ -69,20 +69,20 @@ class GroupAdmin(admin.ModelAdmin):
 @admin.register(Computer)
 class ComputerAdmin(admin.ModelAdmin):
     list_display = (
-        'hostname', 'device_id_short', 'whitelist_badge',
+        'hostname', 'device_id_short', 'is_whitelisted', 'whitelist_badge',
         'agent_version', 'watchdog_version',
         'group', 'is_online',
         'cpu_display', 'ram_display', 'disk_display', 'network_display',
         'last_seen',
     )
+    list_editable = ('is_whitelisted',)
 
     def whitelist_badge(self, obj):
         if obj.is_whitelisted:
-            return format_html('<span style="color:#ff5252">🔒 Whitelist</span>')
-        return '—'
-    whitelist_badge.short_description = 'Whitelist'
+            return format_html('<span style="color:#ff5252;font-weight:bold;">🔒 Whitelist</span>')
+        return format_html('<span style="color:#4caf50;">Ochiq</span>')
+    whitelist_badge.short_description = 'Ko\'rinish'
     list_filter = ('is_online', 'is_whitelisted', 'group', 'agent_version', 'watchdog_version')
-    list_editable = ('is_whitelisted',) if False else ()   # inline edit ixtiyoriy
     search_fields = ('hostname', 'bios_uuid', 'device_id')
     readonly_fields = ('auth_token', 'last_version_report', 'last_seen')
 

@@ -739,6 +739,78 @@ function pollMetrics() {
 pollMetrics();
 setInterval(pollMetrics, 15000);
 
+// =========== BULK SCREENSHOT — sahifa ochilganda barcha online PC lardan ===========
+// Har online PC uchun bir marta so'rov yuboriladi. Rasm kelgach thumbnail yangilanadi.
+// Server ga yuk tushmasin — 300ms interval bilan ketma-ket.
+(function() {
+    var pcCards = document.querySelectorAll('.pc-card');
+    var onlineIds = [];
+    pcCards.forEach(function(card) {
+        // dataset.pk mavjud va card online marker bilan
+        var pk = card.dataset.pk;
+        var isOnline = card.classList.contains('online');
+        if (pk && isOnline) onlineIds.push({ pk: pk, uuid: card.dataset.uuid });
+    });
+
+    if (!onlineIds.length) return;
+
+    function requestScreenshotFor(pcInfo, delay) {
+        setTimeout(function() {
+            fetch('/device/' + pcInfo.pk + '/screenshot-request/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error || !data.request_id) return;
+                pollScreenshotResult(pcInfo, data.request_id, 0);
+            })
+            .catch(function(){});
+        }, delay);
+    }
+
+    function pollScreenshotResult(pcInfo, reqId, attempts) {
+        if (attempts > 12) return;   // 12 * 2s = 24 sekund max
+        setTimeout(function() {
+            fetch('/device/' + pcInfo.pk + '/screenshot-poll/' + reqId + '/')
+                .then(function(r) { return r.json(); })
+                .then(function(pd) {
+                    if (pd.status === 'COMPLETED' && pd.image_url) {
+                        updateThumbnail(pcInfo.uuid, pd.image_url);
+                    } else if (pd.status === 'FAILED') {
+                        // tinch qoladi — mavjud eski rasm qoladi
+                    } else {
+                        pollScreenshotResult(pcInfo, reqId, attempts + 1);
+                    }
+                })
+                .catch(function() {});
+        }, 2000);
+    }
+
+    function updateThumbnail(uuid, imageUrl) {
+        var card = document.getElementById('pc-' + uuid);
+        if (!card) return;
+        var thumb = card.querySelector('.pc-thumb');
+        if (!thumb) return;
+
+        var bust = imageUrl + (imageUrl.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+        var img = thumb.querySelector('img');
+        if (img) {
+            img.src = bust;
+        } else {
+            // "No connection" holatidan rasmga o'tkazamiz
+            thumb.innerHTML =
+                '<img src="' + bust + '" alt="">' +
+                '<div class="live-indicator"><span class="dot"></span> Yangi</div>';
+        }
+    }
+
+    // Har PC uchun 300ms oralig'ida so'rov yuboramiz — server yig'ilib qolmasin
+    onlineIds.forEach(function(pcInfo, i) {
+        requestScreenshotFor(pcInfo, i * 300);
+    });
+})();
+
 // Countdown label
 var countdownSec = 15;
 setInterval(function(){
