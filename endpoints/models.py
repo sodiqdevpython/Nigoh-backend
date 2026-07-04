@@ -1,5 +1,7 @@
 import secrets
 from django.db import models
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 from utils.models import BaseModel
 from .choices import BuildingNumber, Floor
 
@@ -101,3 +103,47 @@ class Computer(BaseModel):
 
     def __str__(self):
         return f"{self.hostname or 'Unknown'} ({self.device_id or self.bios_uuid})"
+
+
+class WhitelistedComputer(BaseModel):
+    """
+    Whitelist ro'yxati — bu jadvalda mavjud bo'lgan PClarni FAQAT superadmin ko'radi.
+    Admin panel orqali select2 autocomplete bilan qo'shiladi.
+    Bir PC = bir yozuv (OneToOne). Yozuv o'chirilsa — PC yana barcha uchun ochiladi.
+    """
+    computer = models.OneToOneField(
+        Computer, on_delete=models.CASCADE, related_name='whitelist_entry',
+        verbose_name='Qurilma',
+    )
+    note = models.TextField(
+        blank=True, default='',
+        verbose_name='Izoh',
+        help_text="Nima uchun whitelistga qo'shildi (ixtiyoriy)",
+    )
+    added_by = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='whitelist_added',
+        verbose_name="Kim qo'shdi",
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Whitelist yozuvi"
+        verbose_name_plural = "Whitelist — faqat superadmin ko'radi"
+
+    def __str__(self):
+        return f"{self.computer.hostname or self.computer.device_id} — whitelist"
+
+
+# Signal: WhitelistedComputer yaratilsa/o'chirilsa Computer.is_whitelisted ni sync qilamiz
+# (mavjud kod `computer.is_whitelisted` bo'yicha tekshiradi — buni buzmaymiz)
+@receiver(post_save, sender=WhitelistedComputer)
+def _sync_whitelist_on_save(sender, instance, **kwargs):
+    if instance.computer_id and not instance.computer.is_whitelisted:
+        Computer.objects.filter(pk=instance.computer_id).update(is_whitelisted=True)
+
+
+@receiver(post_delete, sender=WhitelistedComputer)
+def _sync_whitelist_on_delete(sender, instance, **kwargs):
+    if instance.computer_id:
+        Computer.objects.filter(pk=instance.computer_id).update(is_whitelisted=False)

@@ -6,7 +6,7 @@ from django.http import HttpResponseRedirect
 from django.utils.html import format_html, mark_safe
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-from .models import Group, Computer
+from .models import Group, Computer, WhitelistedComputer
 from .consumers import LIVE_METRICS
 from commands.services import trigger_uninstall, trigger_update
 
@@ -69,22 +69,22 @@ class GroupAdmin(admin.ModelAdmin):
 @admin.register(Computer)
 class ComputerAdmin(admin.ModelAdmin):
     list_display = (
-        'hostname', 'device_id_short', 'is_whitelisted', 'whitelist_badge',
+        'hostname', 'device_id_short', 'whitelist_badge',
         'agent_version', 'watchdog_version',
         'group', 'is_online',
         'cpu_display', 'ram_display', 'disk_display', 'network_display',
         'last_seen',
     )
-    list_editable = ('is_whitelisted',)
 
     def whitelist_badge(self, obj):
         if obj.is_whitelisted:
             return format_html('<span style="color:#ff5252;font-weight:bold;">🔒 Whitelist</span>')
         return format_html('<span style="color:#4caf50;">Ochiq</span>')
-    whitelist_badge.short_description = 'Ko\'rinish'
+    whitelist_badge.short_description = "Ko'rinish"
     list_filter = ('is_online', 'is_whitelisted', 'group', 'agent_version', 'watchdog_version')
     search_fields = ('hostname', 'bios_uuid', 'device_id')
-    readonly_fields = ('auth_token', 'last_version_report', 'last_seen')
+    # is_whitelisted — WhitelistedComputer orqali boshqariladi, bu yerda faqat ko'rinadi
+    readonly_fields = ('auth_token', 'last_version_report', 'last_seen', 'is_whitelisted')
 
     def device_id_short(self, obj):
         if obj.device_id:
@@ -232,3 +232,43 @@ class ComputerAdmin(admin.ModelAdmin):
             return HttpResponseRedirect(reverse('admin:endpoints_computer_changelist'))
 
         return render(request, 'admin/custom_command.html', context={'queryset': queryset})
+
+
+# ============================================================
+# WHITELIST — faqat superadmin ko'radi
+# Ko'plab PC larni qo'shish uchun bu yerdan yozuv qo'shasiz.
+# ComputerAdmin da search_fields = ('hostname', 'bios_uuid', 'device_id') bor —
+# autocomplete_fields shu asosida select2 orqali qidiradi.
+# ============================================================
+@admin.register(WhitelistedComputer)
+class WhitelistedComputerAdmin(admin.ModelAdmin):
+    list_display = ('computer', 'note_short', 'added_by', 'created_at')
+    search_fields = ('computer__hostname', 'computer__device_id', 'computer__bios_uuid', 'note')
+    autocomplete_fields = ('computer',)
+    readonly_fields = ('added_by', 'created_at', 'updated_at')
+    fields = ('computer', 'note', 'added_by', 'created_at', 'updated_at')
+
+    def note_short(self, obj):
+        return (obj.note[:60] + '...') if obj.note and len(obj.note) > 60 else (obj.note or '—')
+    note_short.short_description = 'Izoh'
+
+    def save_model(self, request, obj, form, change):
+        if not obj.added_by:
+            obj.added_by = request.user
+        super().save_model(request, obj, form, change)
+
+    def has_module_permission(self, request):
+        # Faqat superuser bu bo'limni ko'radi
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
