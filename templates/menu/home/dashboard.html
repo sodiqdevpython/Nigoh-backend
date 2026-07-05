@@ -5,19 +5,19 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/globe.gl@2.32.0/dist/globe.gl.min.js"
+        onerror="window.__GLOBE_LOAD_ERR=1"></script>
 
 <style>
-    /* Boshqa sahifalar bilan bir xil glassmorphism style */
     .bg-dark-transparent {
         background-color: rgba(0, 0, 0, 0.45) !important;
         backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     }
     .border-light-3 { border: 1px solid rgba(255, 255, 255, 0.15) !important; }
     .border-bottom-light-3 { border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important; }
 
-    /* KPI card — dark theme'ga mos */
+    /* KPI card */
     .kpi {
         background: rgba(0,0,0,0.45);
         backdrop-filter: blur(12px);
@@ -32,12 +32,10 @@
     .kpi::before {
         content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
     }
-    .kpi.k-blue::before  { background: linear-gradient(90deg, #4dabf7, transparent); }
-    .kpi.k-green::before { background: linear-gradient(90deg, #4caf50, transparent); }
-    .kpi.k-orange::before{ background: linear-gradient(90deg, #ff9800, transparent); }
-    .kpi.k-red::before   { background: linear-gradient(90deg, #e91e63, transparent); }
-    .kpi.k-purple::before{ background: linear-gradient(90deg, #9c27b0, transparent); }
-    .kpi.k-cyan::before  { background: linear-gradient(90deg, #00bcd4, transparent); }
+    .kpi.k-blue::before   { background: linear-gradient(90deg, #4dabf7, transparent); }
+    .kpi.k-green::before  { background: linear-gradient(90deg, #4caf50, transparent); }
+    .kpi.k-orange::before { background: linear-gradient(90deg, #ff9800, transparent); }
+    .kpi.k-red::before    { background: linear-gradient(90deg, #e91e63, transparent); }
 
     .kpi:hover { border-color: rgba(77,171,247,0.3); transform: translateY(-2px); }
     .kpi .kpi-icon {
@@ -49,7 +47,6 @@
     .kpi .value { color: #fff; font-size: 1.75rem; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; }
     .kpi .sub { color: #7d8fa8; font-size: 0.73rem; margin-top: 6px; }
 
-    /* Section card */
     .sec-card {
         background: rgba(0,0,0,0.45);
         backdrop-filter: blur(12px);
@@ -75,62 +72,27 @@
     }
     .list-row:last-child { border-bottom: none; }
     .list-row:hover { background: rgba(255,255,255,0.03); }
-    .list-row .rank {
-        color: #4dabf7; font-family: monospace; font-weight: 500;
-        min-width: 24px; flex-shrink: 0;
-    }
+    .list-row .rank { color: #4dabf7; font-family: monospace; font-weight: 500; min-width: 24px; flex-shrink: 0; }
     .list-row .name { color: #fff; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 10px; }
     .list-row .sub-name { color: #7d8fa8; font-size: 0.72rem; margin-top: 2px; }
+
     .badge-num {
         background: rgba(77,171,247,0.15);
         border: 1px solid rgba(77,171,247,0.35);
         color: #4dabf7; padding: 2px 10px; border-radius: 12px; font-size: 0.72rem;
         font-variant-numeric: tabular-nums;
     }
-    .badge-num.green { background: rgba(76,175,80,0.15); border-color: rgba(76,175,80,0.35); color: #4caf50; }
-    .badge-num.orange{ background: rgba(255,152,0,0.15); border-color: rgba(255,152,0,0.35); color: #ff9800; }
+    .badge-num.green  { background: rgba(76,175,80,0.15); border-color: rgba(76,175,80,0.35); color: #4caf50; }
+    .badge-num.orange { background: rgba(255,152,0,0.15); border-color: rgba(255,152,0,0.35); color: #ff9800; }
 
-    /* Building card */
-    .bldg-card {
-        background: rgba(0,0,0,0.45);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 10px; padding: 14px 16px;
-        transition: 0.2s;
+    /* Globus */
+    #dashGlobe {
+        width: 100%; height: 420px;
+        background: radial-gradient(circle at 50% 50%, #0f1729 0%, #050a15 60%);
+        border-radius: 8px;
     }
-    .bldg-card:hover { border-color: rgba(77,171,247,0.35); }
-    .bldg-card .b-title { color:#fff; font-size:1rem; font-weight:500; margin:0; display:flex; align-items:center; gap:8px; }
-    .bldg-card .b-badge {
-        background: rgba(77,171,247,0.15); border:1px solid rgba(77,171,247,0.35);
-        color:#4dabf7; padding:2px 8px; border-radius: 8px; font-size:0.7rem;
-    }
-    .bldg-card .b-metric { display:flex; justify-content:space-between; margin-top:8px; font-size:0.78rem; color:#adb5bd; }
-    .bldg-card .b-metric .val { color:#fff; font-weight:500; }
-
-    /* Feed */
-    .feed-row {
-        padding: 10px 20px;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
-        font-size: 0.82rem;
-    }
-    .feed-row:last-child { border-bottom: none; }
-    .feed-row .top { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .feed-row .sub { color: #7d8fa8; font-size: 0.7rem; margin-top: 2px; }
-    .feed-row .app-chip {
-        display: inline-block; padding: 1px 7px; border-radius: 8px;
-        background: rgba(255,255,255,0.06); color: #adb5bd; font-size: 0.66rem;
-    }
-
-    /* Campus map */
-    #campusMap { height: 350px; border-radius: 10px; overflow: hidden; background:#0a0f1c; }
-
-    /* Release info */
-    .release-info {
-        padding: 18px; height: 100%;
-        background: linear-gradient(135deg, rgba(76,175,80,0.1), rgba(77,171,247,0.05));
-        border: 1px solid rgba(76,175,80,0.25);
-        border-radius: 10px;
-    }
-    .release-info .ver { color: #4caf50; font-size: 1.5rem; font-weight: 400; }
+    /* Dunyo xaritasi */
+    #dashWorldMap { height: 420px; background:#0a0f1c; border-radius: 8px; }
 </style>
 
 <div class="content-wrapper">
@@ -146,7 +108,7 @@
                             Boshqaruv paneli
                         </h4>
                         <p class="text-muted small mb-0">
-                            {{ request.user.username }} · Real-time statistika · <span id="serverTime">{{ '' }}</span>
+                            {{ request.user.username }} · Real-time statistika · <span id="serverTime"></span>
                         </p>
                     </div>
                     <div class="d-flex" style="gap:6px;">
@@ -208,45 +170,33 @@
             </div>
         </div>
 
-        <!-- ===== CAMPUS MAP + BUILDING STATS ===== -->
+        <!-- ===== GLOBUS + DUNYO XARITASI ===== -->
         <div class="row mb-4">
             <div class="col-lg-7 mb-3">
                 <div class="sec-card">
                     <div class="sec-header">
                         <div>
-                            <h6><i class="zmdi zmdi-pin-drop mr-2" style="color:#4caf50"></i> Kampus xaritasi</h6>
-                            <div class="sub">Har bino uchun onlayn qurilmalar</div>
+                            <h6><i class="zmdi zmdi-globe-alt mr-2" style="color:#4dabf7"></i> Tashqi ulanishlar globusi</h6>
+                            <div class="sub">Har arc — o'z chiqish nuqtasidan (bino) manzilga</div>
                         </div>
-                        <span class="badge-num green">{{ online_pcs }} onlayn</span>
+                        <a href="{% url 'external_connections' %}" class="badge-num">To'liq ko'rish →</a>
                     </div>
                     <div class="sec-body">
-                        <div id="campusMap"></div>
+                        <div id="dashGlobe"></div>
                     </div>
                 </div>
             </div>
             <div class="col-lg-5 mb-3">
-                <div class="row">
-                    {% for b in building_stats %}
-                    <div class="col-md-6 mb-3">
-                        <div class="bldg-card h-100">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <h6 class="b-title">
-                                    <i class="zmdi zmdi-city" style="color:#4dabf7"></i>
-                                    {{ b.label }}
-                                </h6>
-                                <span class="b-badge">{{ b.online }}/{{ b.total }}</span>
-                            </div>
-                            <div class="b-metric">
-                                <span>Xonalar</span>
-                                <span class="val">{{ b.groups }}</span>
-                            </div>
-                            <div class="b-metric">
-                                <span>Bugungi kirishlar</span>
-                                <span class="val">{{ b.activity }}</span>
-                            </div>
+                <div class="sec-card">
+                    <div class="sec-header">
+                        <div>
+                            <h6><i class="zmdi zmdi-map mr-2" style="color:#4caf50"></i> Davlatlar xaritasi</h6>
+                            <div class="sub">Har doira — ulanishlar soni</div>
                         </div>
                     </div>
-                    {% endfor %}
+                    <div class="sec-body">
+                        <div id="dashWorldMap"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -282,7 +232,7 @@
         </div>
 
         <div class="row mb-4">
-            <div class="col-lg-8 mb-3">
+            <div class="col-12 mb-3">
                 <div class="sec-card">
                     <div class="sec-header">
                         <div>
@@ -291,20 +241,7 @@
                         </div>
                     </div>
                     <div class="sec-body">
-                        <canvas id="chartHourly" height="90"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4 mb-3">
-                <div class="sec-card">
-                    <div class="sec-header">
-                        <div>
-                            <h6><i class="zmdi zmdi-city mr-2" style="color:#9c27b0"></i> Binolar bo'yicha</h6>
-                            <div class="sub">Onlayn / Oflayn</div>
-                        </div>
-                    </div>
-                    <div class="sec-body">
-                        <canvas id="chartBuildings" height="180"></canvas>
+                        <canvas id="chartHourly" height="60"></canvas>
                     </div>
                 </div>
             </div>
@@ -379,106 +316,23 @@
             </div>
         </div>
 
-        <!-- ===== BOTTOM ROW ===== -->
-        <div class="row mb-4">
-            <div class="col-lg-8 mb-3">
-                <div class="sec-card">
-                    <div class="sec-header">
-                        <div>
-                            <h6><i class="zmdi zmdi-time-restore mr-2" style="color:#4dabf7"></i> Oxirgi faoliyat</h6>
-                            <div class="sub">So'nggi 12 ta URL kirishi</div>
-                        </div>
-                    </div>
-                    {% for act in recent_activities %}
-                        <div class="feed-row">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="flex-grow-1" style="overflow:hidden;">
-                                    <div class="top" title="{{ act.title|default:act.url }}">
-                                        {{ act.title|default:act.url|truncatechars:70 }}
-                                    </div>
-                                    <div class="sub">
-                                        <i class="zmdi zmdi-desktop-mac"></i> {{ act.computer.hostname|default:"Unknown" }}
-                                        {% if act.computer.group %}
-                                            · {{ act.computer.group.room_number|default:act.computer.group.name }}
-                                        {% endif %}
-                                        · <span class="app-chip">{{ act.app_name }}</span>
-                                    </div>
-                                </div>
-                                <span class="sub" style="flex-shrink:0;margin-left:10px;font-family:monospace;">
-                                    {{ act.created_at|date:"H:i" }}
-                                </span>
-                            </div>
-                        </div>
-                    {% empty %}
-                        <div class="feed-row" style="text-align:center;color:#7d8fa8;">Faoliyat yo'q</div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <div class="col-lg-4 mb-3">
-                <div class="row">
-                    {% if is_super and active_release %}
-                    <div class="col-12 mb-3">
-                        <div class="release-info">
-                            <div class="d-flex justify-content-between align-items-start mb-3">
-                                <div>
-                                    <div class="text-muted small">Faol Nigoh Release</div>
-                                    <div class="ver">v{{ active_release.version }}</div>
-                                </div>
-                                <span class="badge-num green">● Aktiv</span>
-                            </div>
-                            <div class="row text-center">
-                                <div class="col-4">
-                                    <div class="text-white h5 mb-0">{{ active_release.files.count }}</div>
-                                    <div class="text-muted" style="font-size:0.7rem;">Fayllar</div>
-                                </div>
-                                <div class="col-4">
-                                    <div class="text-white h5 mb-0">{{ pending_update_count }}</div>
-                                    <div class="text-muted" style="font-size:0.7rem;">Kutmoqda</div>
-                                </div>
-                                <div class="col-4">
-                                    <div class="text-white h5 mb-0">{{ whitelist_pcs }}</div>
-                                    <div class="text-muted" style="font-size:0.7rem;">Whitelist</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    <div class="col-12 mb-3">
-                        <div class="sec-card" style="padding: 18px;">
-                            <div class="row text-center">
-                                <div class="col-6 mb-3">
-                                    <div class="text-white" style="font-size:1.6rem;font-weight:300;">{{ total_groups }}</div>
-                                    <div class="text-muted" style="font-size:0.72rem;">Guruhlar (xonalar)</div>
-                                </div>
-                                <div class="col-6 mb-3">
-                                    <div class="text-white" style="font-size:1.6rem;font-weight:300;">
-                                        {{ hw_ram_avg|floatformat:1 }} <small style="font-size:0.7rem;color:#7d8fa8;">GB</small>
-                                    </div>
-                                    <div class="text-muted" style="font-size:0.72rem;">O'rtacha RAM</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
     </div>
 </div>
+
+<!-- ===== DATA (safe JSON) ===== -->
+<script id="dashOrigins" type="application/json">{{ globe_origins_json|safe }}</script>
+<script id="dashArcs"    type="application/json">{{ globe_arcs_json|safe }}</script>
 
 <script>
 (function() {
     // Server time
     function tick() {
-        var now = new Date();
         var el = document.getElementById('serverTime');
-        if (el) el.textContent = now.toLocaleTimeString('uz-UZ', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        if (el) el.textContent = new Date().toLocaleTimeString('uz-UZ', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
     }
     tick(); setInterval(tick, 1000);
 
-    // Country flags
+    // Flag emojis
     function flagEmoji(code) {
         if (!code || code.length !== 2) return '🌐';
         var cc = code.toUpperCase();
@@ -488,71 +342,188 @@
         el.textContent = flagEmoji(el.dataset.cc);
     });
 
-    // ===== CAMPUS MAP =====
-    var campusMap = L.map('campusMap', {
-        center: [{{ campus_center_lat|unlocalize }}, {{ campus_center_lng|unlocalize }}],
-        zoom: 18, minZoom: 16, maxZoom: 20,
-        zoomControl: true, attributionControl: false,
-    });
-    L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        { maxZoom: 20 }
-    ).addTo(campusMap);
-    L.tileLayer(
-        'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
-        { subdomains: 'abcd', maxZoom: 20, opacity: 0.9 }
-    ).addTo(campusMap);
+    // Data'ni JSON dan olamiz
+    var origins = [], arcs = [];
+    try { origins = JSON.parse(document.getElementById('dashOrigins').textContent); } catch(e) {}
+    try { arcs    = JSON.parse(document.getElementById('dashArcs').textContent);    } catch(e) {}
 
-    var buildings = {{ building_stats|safe|default:"[]" }};
-    // Django Python list to JSON — Do'kondan direct chiqarish kerak
-})();
-</script>
+    // ===== GLOBE =====
+    var globeEl = document.getElementById('dashGlobe');
+    if (globeEl && typeof Globe !== 'undefined') {
+        var globe = Globe()(globeEl)
+            .backgroundColor('rgba(0,0,0,0)')
+            .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-blue-marble.jpg')
+            .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-topology.png')
+            .showAtmosphere(true).atmosphereColor('#4dabf7').atmosphereAltitude(0.15)
+            .pointOfView({ lat: {{ server_origin_lat|unlocalize }}, lng: {{ server_origin_lng|unlocalize }}, altitude: 2.2 }, 0);
 
-<script id="bldgData" type="application/json">[
-{% for b in building_stats %}
-{"id":{{ b.id }}, "label":"{{ b.label|escapejs }}", "lat":{{ b.lat|unlocalize }}, "lng":{{ b.lng|unlocalize }}, "total":{{ b.total }}, "online":{{ b.online }}, "offline":{{ b.offline }}, "groups":{{ b.groups }}, "activity":{{ b.activity }}}{% if not forloop.last %},{% endif %}
-{% endfor %}
-]</script>
+        var controls = globe.controls();
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.4;
+        controls.enableDamping = true;
+        controls.rotateSpeed = 1.4;
+        controls.zoomSpeed = 1.2;
+        controls.minDistance = 130; controls.maxDistance = 500;
 
-<script>
-(function() {
-    // Recreate — bldgData ni scriptdan olamiz (safe JSON)
-    var raw = document.getElementById('bldgData').textContent;
-    var buildings = [];
-    try { buildings = JSON.parse(raw); } catch(e) {}
+        // Deterministic altitude — bir manzilga ko'p bog'lanish ustma-ust chiqmasin
+        function hashAlt(id) {
+            var h = 0; var s = String(id || '');
+            for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+            return 0.15 + (Math.abs(h) % 40) / 100;
+        }
 
-    if (typeof L !== 'undefined' && document.getElementById('campusMap')) {
-        var map = L.DomUtil.get('campusMap')._leaflet_id
-            ? null
-            : null; // map allaqachon yuqorida yaratildi
+        var COLORS = ['#4caf50','#4dabf7','#ff9800','#e91e63','#9c27b0','#00bcd4'];
+        function nextColor(i) { return COLORS[i % COLORS.length]; }
 
-        // Yuqorida yaratgan map'ga markerlar qo'shamiz
-        window.setTimeout(function() {
-            // Global map access — yuqoridagi IIFE ichida edi
-            // Buni yechish uchun map ni qayta yaratamiz:
-            var mapContainer = document.getElementById('campusMap');
-            // Yangi map yaratmaslik uchun — Leaflet layer'lar bilan ishlaymiz
-            // Aslida yuqoridagi map allaqachon markazlashgan. Marker'larni qo'shish uchun
-            // uni window global qilib olamiz.
-        }, 100);
+        // Origin markerlar
+        globe
+            .pointsData(origins.map(function(o) { return { lat: o.lat, lng: o.lng, label: o.label }; }))
+            .pointLat('lat').pointLng('lng').pointColor(function(){ return '#4dabf7'; })
+            .pointAltitude(0.02).pointRadius(0.4).pointLabel('label');
+
+        // Rings — origin (ko'k) + destination (sariq, katta radius)
+        var originRings = origins.map(function(o) {
+            return {
+                lat: o.lat, lng: o.lng,
+                __color: function(t){ return 'rgba(77,171,247,' + (1-t) + ')'; },
+                __maxR: 2, __speed: 1.5, __period: 1400,
+            };
+        });
+
+        // Arc konfig
+        globe
+            .arcColor('color')
+            .arcAltitude(function(d){ return d.__altitude; })
+            .arcStroke(0.7).arcDashLength(0.5).arcDashGap(0.12)
+            .arcDashAnimateTime(6000)
+            .arcLabel('tooltip');
+
+        globe.ringLat(function(d){return d.lat;}).ringLng(function(d){return d.lng;})
+             .ringColor(function(d){ return d.__color; })
+             .ringMaxRadius(function(d){ return d.__maxR; })
+             .ringPropagationSpeed(function(d){ return d.__speed; })
+             .ringRepeatPeriod(function(d){ return d.__period; });
+
+        // Playback logic — MAX_LIVE arcs bilan
+        var MAX_LIVE = 5, LIFETIME = 12000, TICK = 2500;
+        var queue = [], seen = 0, ci = 0;
+
+        function buildArc(a) {
+            var c = nextColor(ci++);
+            return {
+                startLat: a.origin.lat, startLng: a.origin.lng,
+                endLat: a.geo.lat, endLng: a.geo.lng,
+                color: [c, c + '55'],
+                tooltip: a.hostname + ' → ' + a.domain,
+                createdAt: Date.now(),
+                __altitude: hashAlt(a.id + '|' + a.domain),
+            };
+        }
+
+        function render() {
+            globe.arcsData(queue);
+            var destRings = queue.map(function(arc) {
+                return {
+                    lat: arc.endLat, lng: arc.endLng,
+                    __color: function(t){ return 'rgba(255,193,7,' + ((1-t)*0.7) + ')'; },
+                    __maxR: 5, __speed: 3, __period: 2000,
+                };
+            });
+            globe.ringsData(originRings.concat(destRings));
+        }
+
+        // Boshlang'ich burst — oxirgi 3 arc darhol chiqsin
+        if (arcs.length > 0) {
+            var burstStart = Math.max(0, arcs.length - 3);
+            for (var i = burstStart; i < arcs.length; i++) queue.push(buildArc(arcs[i]));
+            seen = arcs.length;
+        }
+        render();
+
+        setInterval(function() {
+            if (!arcs.length) return;
+            if (seen < arcs.length) {
+                queue.push(buildArc(arcs[seen]));
+                seen++;
+            } else {
+                seen = 0;   // loop
+            }
+            var now = Date.now();
+            queue = queue.filter(function(a){ return (now - a.createdAt) < LIFETIME; });
+            while (queue.length > MAX_LIVE) queue.shift();
+            render();
+        }, TICK);
+
+        function resize() {
+            var r = globeEl.getBoundingClientRect();
+            globe.width(r.width).height(r.height);
+        }
+        resize(); window.addEventListener('resize', resize);
+    } else if (globeEl) {
+        globeEl.innerHTML = '<div style="padding:40px;text-align:center;color:#7d8fa8;">Globus kutubxonasi yuklanmadi</div>';
     }
-})();
-</script>
 
-<script>
-(function() {
-    // Chart.js default — dark theme
+    // ===== DUNYO XARITASI (Leaflet) =====
+    var wmEl = document.getElementById('dashWorldMap');
+    if (wmEl && typeof L !== 'undefined') {
+        var wm = L.map('dashWorldMap', {
+            center: [20, 30], zoom: 2, minZoom: 2, maxZoom: 6,
+            worldCopyJump: true, zoomControl: true, attributionControl: false,
+        });
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            subdomains: 'abcd', maxZoom: 6,
+        }).addTo(wm);
+
+        // Davlatlar bo'yicha jamlaymiz
+        var byCountry = {};
+        arcs.forEach(function(a) {
+            var g = a.geo || {};
+            var k = g.country || '';
+            if (!k) return;
+            if (!byCountry[k]) {
+                byCountry[k] = {
+                    country: k, code: g.country_code || '',
+                    lat: g.lat, lng: g.lng, count: 0, domains: {}
+                };
+            }
+            byCountry[k].count++;
+            byCountry[k].domains[a.domain] = (byCountry[k].domains[a.domain] || 0) + 1;
+        });
+        var list = Object.values(byCountry);
+        if (list.length) {
+            var maxC = Math.max.apply(null, list.map(function(c){ return c.count; }));
+            list.forEach(function(c) {
+                if (!c.lat || !c.lng) return;
+                var r = 6 + (c.count / maxC) * 22;
+                var flag = c.code
+                    ? String.fromCodePoint.apply(null, [...c.code.toUpperCase()].map(function(x){return 127397+x.charCodeAt(0);}))
+                    : '🌐';
+                var doms = Object.keys(c.domains).slice(0,5).join(', ');
+                L.circleMarker([c.lat, c.lng], {
+                    radius: r, fillColor: '#4dabf7', color: '#4dabf7',
+                    weight: 2, opacity: 0.9, fillOpacity: 0.45,
+                }).addTo(wm).bindPopup(
+                    '<div style="color:#333;font-size:13px;">' +
+                    '<div style="font-size:20px;margin-bottom:6px;">' + flag + ' <b>' + c.country + '</b></div>' +
+                    '<div><b>Ulanishlar:</b> ' + c.count + '</div>' +
+                    '<div><b>Domenlar:</b> ' + doms + (Object.keys(c.domains).length > 5 ? '...' : '') + '</div>' +
+                    '</div>'
+                );
+            });
+        }
+        setTimeout(function(){ wm.invalidateSize(); }, 200);
+    }
+
+    // ===== CHARTS =====
     Chart.defaults.color = '#adb5bd';
     Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
 
-    // Weekly line
     var w = document.getElementById('chartWeekly');
     if (w) new Chart(w.getContext('2d'), {
         type: 'line',
         data: {
             labels: {{ weekly_labels|safe }},
             datasets: [{
-                label: 'Tashriflar',
                 data: {{ weekly_data|safe }},
                 borderColor: '#4dabf7',
                 backgroundColor: 'rgba(77,171,247,0.15)',
@@ -570,7 +541,6 @@
         }
     });
 
-    // Hourly bar
     var h = document.getElementById('chartHourly');
     if (h) new Chart(h.getContext('2d'), {
         type: 'bar',
@@ -592,18 +562,17 @@
         }
     });
 
-    // Apps doughnut
     var ac = document.getElementById('chartApps');
     if (ac) {
-        var labels = {{ apps_labels|safe }};
-        var data = {{ apps_data|safe }};
-        if (labels.length) {
+        var appsLabels = {{ apps_labels|safe }};
+        var appsData = {{ apps_data|safe }};
+        if (appsLabels.length) {
             new Chart(ac.getContext('2d'), {
                 type: 'doughnut',
                 data: {
-                    labels: labels,
+                    labels: appsLabels,
                     datasets: [{
-                        data: data,
+                        data: appsData,
                         backgroundColor: ['#4dabf7','#4caf50','#ff9800','#e91e63','#9c27b0'],
                         borderColor: 'rgba(0,0,0,0.3)', borderWidth: 2,
                     }]
@@ -617,91 +586,6 @@
             ac.parentElement.innerHTML = '<div style="text-align:center;color:#7d8fa8;padding:30px;">Ma\'lumot yo\'q</div>';
         }
     }
-
-    // Buildings stacked bar
-    var bg = document.getElementById('chartBuildings');
-    if (bg) {
-        var lbl = {{ building_labels|safe }};
-        if (lbl.length) {
-            new Chart(bg.getContext('2d'), {
-                type: 'bar',
-                data: {
-                    labels: lbl,
-                    datasets: [
-                        { label: 'Onlayn', data: {{ building_online|safe }}, backgroundColor: '#4caf50' },
-                        { label: 'Oflayn', data: {{ building_offline|safe }}, backgroundColor: 'rgba(255,82,82,0.6)' },
-                    ]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { labels: { boxWidth: 12, font: {size:11} } } },
-                    scales: {
-                        y: { stacked: true, beginAtZero: true, grid: { color:'rgba(255,255,255,0.05)' } },
-                        x: { stacked: true, grid: { display: false } }
-                    }
-                }
-            });
-        }
-    }
-
-    // ===== Campus map markers (yuqoridagi IIFE'da yaratilgan map'ga marker qo'shamiz) =====
-    // Marker'lar uchun map'ni window'ga olamiz
-    setTimeout(function() {
-        // Map yaratish — yangi (yuqoridagini tozalaymiz)
-        var el = document.getElementById('campusMap');
-        if (!el || !window.L) return;
-
-        // Agar map yaratilgan bo'lsa — layer'larni saqlab, uni yangilaymiz
-        // Oddiyroq: yangi map yaratamiz (avvalgi container ni tozalab)
-        if (el._leaflet_id) {
-            el._leaflet_id = null;
-            el.innerHTML = '';
-        }
-
-        var m = L.map('campusMap', {
-            center: [{{ campus_center_lat|unlocalize }}, {{ campus_center_lng|unlocalize }}],
-            zoom: 18, minZoom: 15, maxZoom: 20,
-            zoomControl: true, attributionControl: false,
-        });
-        L.tileLayer(
-            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            { maxZoom: 20 }
-        ).addTo(m);
-        L.tileLayer(
-            'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
-            { subdomains: 'abcd', maxZoom: 20, opacity: 0.85 }
-        ).addTo(m);
-
-        var raw = document.getElementById('bldgData').textContent;
-        var buildings = [];
-        try { buildings = JSON.parse(raw); } catch(e) {}
-
-        buildings.forEach(function(b) {
-            if (!b.lat || !b.lng) return;
-            var color = b.online > 0 ? '#4caf50' : '#7d8fa8';
-            var radius = 12 + Math.min(30, b.total * 2);
-            L.circleMarker([b.lat, b.lng], {
-                radius: radius,
-                fillColor: color, color: color,
-                weight: 2, opacity: 0.9, fillOpacity: 0.35,
-            }).addTo(m).bindPopup(
-                '<div style="color:#333;font-size:13px;">' +
-                '<b style="font-size:15px;">' + b.label + '</b><br>' +
-                'Onlayn: <b>' + b.online + '</b> / ' + b.total + '<br>' +
-                'Xonalar: ' + b.groups + '<br>' +
-                'Bugungi kirishlar: ' + b.activity +
-                '</div>'
-            );
-            L.marker([b.lat, b.lng], {
-                icon: L.divIcon({
-                    className: '', iconSize: [80, 22],
-                    html: '<div style="background:rgba(0,0,0,0.6);color:#fff;padding:1px 6px;border-radius:4px;font-size:11px;text-align:center;border:1px solid rgba(255,255,255,0.15);">' + b.label + '</div>'
-                })
-            }).addTo(m);
-        });
-
-        setTimeout(function(){ m.invalidateSize(); }, 200);
-    }, 300);
 })();
 </script>
 

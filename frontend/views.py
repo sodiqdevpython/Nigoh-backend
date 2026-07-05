@@ -159,30 +159,6 @@ def home(request):
         if 0 <= h < 24:
             hourly_activity[h] = row['cnt']
 
-    # ===== BUILDING STATS =====
-    # Har bino uchun: PC soni, online, guruh soni
-    building_stats = []
-    for bid, origin in BUILDING_ORIGINS.items():
-        pcs = computer_qs.filter(group__building=bid)
-        total = pcs.count()
-        online = pcs.filter(is_online=True).count()
-        groups_in_bldg = Group.objects.filter(building=bid).count()
-        today_acts = ActivityLog.objects.filter(
-            computer_id__in=pcs.values_list('id', flat=True),
-            created_at__gte=today_start,
-        ).count()
-        building_stats.append({
-            'id': bid,
-            'label': origin['label'],
-            'lat': origin['lat'],
-            'lng': origin['lng'],
-            'total': total,
-            'online': online,
-            'offline': total - online,
-            'groups': groups_in_bldg,
-            'activity': today_acts,
-        })
-
     # ===== TOP GROUPS (xonalar) =====
     top_groups = list(
         computer_qs.filter(group__isnull=False)
@@ -204,33 +180,6 @@ def home(request):
     except Exception:
         top_countries = []
 
-    # Oxirgi faoliyat feed
-    recent_activities = list(
-        ActivityLog.objects.filter(computer_id__in=visible_ids)
-        .exclude(url__isnull=True).exclude(url='')
-        .select_related('computer', 'computer__group')
-        .order_by('-created_at')[:12]
-    )
-
-    # Release info
-    active_release = None
-    pending_update_count = 0
-    if is_super:
-        try:
-            from commands.models import Release, PendingCommand
-            active_release = Release.objects.filter(
-                target=Release.TARGET_NIGOH, is_active=True
-            ).order_by('-created_at').first()
-            pending_update_count = PendingCommand.objects.filter(
-                action=PendingCommand.ACTION_UPDATE,
-                acknowledged_at__isnull=True,
-            ).count()
-        except Exception:
-            pass
-
-    # Hardware overview — average CPU/RAM among online agents
-    hw_ram_avg = computer_qs.filter(is_online=True).aggregate(avg=models.Avg('ram_gb'))['avg'] or 0
-
     online_pct = round((online_pcs / total_pcs * 100) if total_pcs else 0)
 
     # JSON chart data
@@ -240,11 +189,46 @@ def home(request):
     hourly_data   = json.dumps(hourly_activity)
     apps_labels   = json.dumps([a['app_name'] for a in top_apps])
     apps_data     = json.dumps([a['total_sec'] or 0 for a in top_apps])
-    building_labels = json.dumps([b['label'] for b in building_stats])
-    building_online = json.dumps([b['online'] for b in building_stats])
-    building_offline = json.dumps([b['offline'] for b in building_stats])
-    campus_center_lat = SERVER_ORIGIN['lat']
-    campus_center_lng = SERVER_ORIGIN['lng']
+
+    # ===== GLOBUS + DUNYO XARITASI uchun ma'lumot (external_connections dan) =====
+    # Bugungi ActivityLog + geo
+    from tracking.geo import extract_domain, resolve_domains_bulk
+    globe_activities = list(
+        today_activities
+        .exclude(url__isnull=True).exclude(url='')
+        .select_related('computer', 'computer__group')
+        .order_by('created_at')[:300]
+    )
+    domain_map = {}
+    for a in globe_activities:
+        try:
+            d = extract_domain(a.url)
+        except Exception:
+            d = None
+        if d:
+            domain_map[a.id] = d
+    try:
+        geo_map = resolve_domains_bulk(list(set(domain_map.values())), max_new=25)
+    except Exception:
+        geo_map = {}
+
+    globe_arcs = []
+    for a in globe_activities:
+        d = domain_map.get(a.id)
+        if not d:
+            continue
+        g = geo_map.get(d)
+        if not g:
+            continue
+        origin = _origin_for_computer(a.computer)
+        globe_arcs.append({
+            'id':       str(a.id),
+            'domain':   d,
+            'hostname': (a.computer.hostname if a.computer else 'Unknown') or 'Unknown',
+            'ts':       a.created_at.isoformat(),
+            'origin':   origin,
+            'geo':      g,
+        })
 
     context = {
         'total_pcs': total_pcs,
@@ -260,22 +244,17 @@ def home(request):
         'top_apps': top_apps,
         'top_groups': top_groups,
         'top_countries': top_countries,
-        'building_stats': building_stats,
         'weekly_labels': weekly_labels,
         'weekly_data': weekly_data,
         'hourly_labels': hourly_labels,
         'hourly_data': hourly_data,
         'apps_labels': apps_labels,
         'apps_data': apps_data,
-        'building_labels': building_labels,
-        'building_online': building_online,
-        'building_offline': building_offline,
-        'campus_center_lat': campus_center_lat,
-        'campus_center_lng': campus_center_lng,
-        'recent_activities': recent_activities,
-        'active_release': active_release,
-        'pending_update_count': pending_update_count,
-        'hw_ram_avg': hw_ram_avg,
+        # Globus va dunyo xaritasi uchun
+        'globe_origins_json': json.dumps(list(BUILDING_ORIGINS.values()) + [DEFAULT_ORIGIN]),
+        'globe_arcs_json':    json.dumps(globe_arcs),
+        'server_origin_lat':  SERVER_ORIGIN['lat'],
+        'server_origin_lng':  SERVER_ORIGIN['lng'],
         'is_super': is_super,
     }
     return render(request, 'menu/home/dashboard.html', context)

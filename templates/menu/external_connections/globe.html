@@ -511,14 +511,15 @@
         .ringRepeatPeriod(d => d.__period || 1400);
     globe.ringsData([{ lat: ORIGIN.lat, lng: ORIGIN.lng }]);
 
-    // Arc konfig — click hitbox kengaytirilgan, harakat sekin
+    // Arc konfig — har arc uchun turli altitude (bir manzilga bir necha bog'lanish
+    // ustma-ust chiqmasin uchun deterministic hash-based)
     globe
         .arcColor('color')
-        .arcAltitudeAutoScale(0.45)
+        .arcAltitude(d => d.__altitude)     // buildArc()da har arc uchun beriladi
         .arcStroke(0.9)
         .arcDashLength(0.5)
         .arcDashGap(0.12)
-        .arcDashAnimateTime(6000)             // sekinroq uchish
+        .arcDashAnimateTime(6000)
         .arcsTransitionDuration(300)
         .arcLabel(d => d.tooltip)
         .onArcClick(a => a && openDetail(a.raw))
@@ -569,9 +570,16 @@
         return `${h} soat ${m%60} dq`;
     }
 
+    // Deterministic hash → 0.15..0.55 oraliqda altitude. Bir xil arc doim bir xil balandlikda.
+    function hashAltitude(id) {
+        var h = 0;
+        var s = String(id || '');
+        for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+        return 0.15 + (Math.abs(h) % 40) / 100;
+    }
+
     function buildArc(a) {
         const c = nextColor();
-        // Har arc — PC ning binosidan chiqadi (backend'dan kelgan `origin`)
         const oLat = (a.origin && a.origin.lat) || ORIGIN.lat;
         const oLng = (a.origin && a.origin.lng) || ORIGIN.lng;
         return {
@@ -581,6 +589,7 @@
             tooltip: `${a.hostname} → ${a.domain}${a.origin ? ' (' + a.origin.label + ')' : ''}`,
             raw: a,
             createdAt: Date.now(),
+            __altitude: hashAltitude(a.id + '|' + a.domain),
         };
     }
 
