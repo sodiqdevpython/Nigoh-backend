@@ -1,87 +1,134 @@
 {% extends 'base/base.html' %}
+{% load l10n %}
 {% block content %}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
+    /* Boshqa sahifalar bilan bir xil glassmorphism style */
     .bg-dark-transparent {
         background-color: rgba(0, 0, 0, 0.45) !important;
         backdrop-filter: blur(12px);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 10px;
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     }
-    .border-bottom-light-3 { border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important; }
+    .border-light-3 { border: 1px solid rgba(255, 255, 255, 0.15) !important; }
+    .border-bottom-light-3 { border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important; }
 
-    /* KPI card */
-    .kpi-card {
+    /* KPI card — dark theme'ga mos */
+    .kpi {
         background: rgba(0,0,0,0.45);
+        backdrop-filter: blur(12px);
         border: 1px solid rgba(255,255,255,0.1);
         border-radius: 10px;
         padding: 18px 20px;
-        transition: 0.2s;
         height: 100%;
+        transition: 0.2s;
+        position: relative;
+        overflow: hidden;
     }
-    .kpi-card:hover { border-color: rgba(77,171,247,0.3); transform: translateY(-2px); }
-    .kpi-card .icon-wrap {
-        width: 44px; height: 44px; border-radius: 10px;
-        display: inline-flex; align-items: center; justify-content: center;
-        font-size: 1.35rem; margin-bottom: 12px;
+    .kpi::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
     }
-    .kpi-card .label { color: #adb5bd; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 3px; }
-    .kpi-card .value { color: #fff; font-size: 1.8rem; font-weight: 300; line-height: 1; }
-    .kpi-card .sub { color: #7d8fa8; font-size: 0.75rem; margin-top: 6px; }
-    .kpi-card .value .accent { color: #4caf50; }
+    .kpi.k-blue::before  { background: linear-gradient(90deg, #4dabf7, transparent); }
+    .kpi.k-green::before { background: linear-gradient(90deg, #4caf50, transparent); }
+    .kpi.k-orange::before{ background: linear-gradient(90deg, #ff9800, transparent); }
+    .kpi.k-red::before   { background: linear-gradient(90deg, #e91e63, transparent); }
+    .kpi.k-purple::before{ background: linear-gradient(90deg, #9c27b0, transparent); }
+    .kpi.k-cyan::before  { background: linear-gradient(90deg, #00bcd4, transparent); }
 
-    /* Section */
+    .kpi:hover { border-color: rgba(77,171,247,0.3); transform: translateY(-2px); }
+    .kpi .kpi-icon {
+        width: 42px; height: 42px; border-radius: 10px;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 1.3rem; margin-bottom: 10px;
+    }
+    .kpi .label { color: #adb5bd; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 4px; }
+    .kpi .value { color: #fff; font-size: 1.75rem; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; }
+    .kpi .sub { color: #7d8fa8; font-size: 0.73rem; margin-top: 6px; }
+
+    /* Section card */
     .sec-card {
         background: rgba(0,0,0,0.45);
+        backdrop-filter: blur(12px);
         border: 1px solid rgba(255,255,255,0.1);
         border-radius: 10px;
         color: #d8dee9;
+        height: 100%;
     }
     .sec-card .sec-header {
-        padding: 14px 20px;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
+        padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.06);
+        display: flex; justify-content: space-between; align-items: center;
     }
-    .sec-card .sec-header h6 { color: #fff; margin: 0; font-weight: 500; }
-    .sec-card .sec-header .sub { color: #7d8fa8; font-size: 0.75rem; margin-top: 2px; }
+    .sec-card .sec-header h6 { color: #fff; margin: 0; font-weight: 500; font-size: 0.95rem; }
+    .sec-card .sec-header .sub { color: #7d8fa8; font-size: 0.72rem; margin-top: 2px; }
+    .sec-card .sec-body { padding: 16px 20px; }
 
+    /* Ro'yxat qatorlari */
     .list-row {
         padding: 10px 20px;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
+        border-bottom: 1px solid rgba(255,255,255,0.05);
         display: flex; justify-content: space-between; align-items: center;
         font-size: 0.85rem;
     }
     .list-row:last-child { border-bottom: none; }
     .list-row:hover { background: rgba(255,255,255,0.03); }
-    .list-row .rank { color: #4dabf7; font-family: monospace; font-weight: 500; width: 22px; flex-shrink: 0; }
+    .list-row .rank {
+        color: #4dabf7; font-family: monospace; font-weight: 500;
+        min-width: 24px; flex-shrink: 0;
+    }
     .list-row .name { color: #fff; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 10px; }
-    .list-row .badge-num {
+    .list-row .sub-name { color: #7d8fa8; font-size: 0.72rem; margin-top: 2px; }
+    .badge-num {
         background: rgba(77,171,247,0.15);
         border: 1px solid rgba(77,171,247,0.35);
-        color: #4dabf7; padding: 2px 10px; border-radius: 12px; font-size: 0.7rem;
+        color: #4dabf7; padding: 2px 10px; border-radius: 12px; font-size: 0.72rem;
+        font-variant-numeric: tabular-nums;
     }
+    .badge-num.green { background: rgba(76,175,80,0.15); border-color: rgba(76,175,80,0.35); color: #4caf50; }
+    .badge-num.orange{ background: rgba(255,152,0,0.15); border-color: rgba(255,152,0,0.35); color: #ff9800; }
 
-    /* Activity feed */
+    /* Building card */
+    .bldg-card {
+        background: rgba(0,0,0,0.45);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px; padding: 14px 16px;
+        transition: 0.2s;
+    }
+    .bldg-card:hover { border-color: rgba(77,171,247,0.35); }
+    .bldg-card .b-title { color:#fff; font-size:1rem; font-weight:500; margin:0; display:flex; align-items:center; gap:8px; }
+    .bldg-card .b-badge {
+        background: rgba(77,171,247,0.15); border:1px solid rgba(77,171,247,0.35);
+        color:#4dabf7; padding:2px 8px; border-radius: 8px; font-size:0.7rem;
+    }
+    .bldg-card .b-metric { display:flex; justify-content:space-between; margin-top:8px; font-size:0.78rem; color:#adb5bd; }
+    .bldg-card .b-metric .val { color:#fff; font-weight:500; }
+
+    /* Feed */
     .feed-row {
         padding: 10px 20px;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
+        border-bottom: 1px solid rgba(255,255,255,0.05);
         font-size: 0.82rem;
     }
     .feed-row:last-child { border-bottom: none; }
     .feed-row .top { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .feed-row .sub { color: #7d8fa8; font-size: 0.7rem; margin-top: 2px; }
-    .feed-row .badge-app {
-        display: inline-block; padding: 1px 8px; border-radius: 8px;
-        background: rgba(255,255,255,0.06); color: #adb5bd; font-size: 0.68rem;
+    .feed-row .app-chip {
+        display: inline-block; padding: 1px 7px; border-radius: 8px;
+        background: rgba(255,255,255,0.06); color: #adb5bd; font-size: 0.66rem;
     }
 
+    /* Campus map */
+    #campusMap { height: 350px; border-radius: 10px; overflow: hidden; background:#0a0f1c; }
+
+    /* Release info */
     .release-info {
-        padding: 20px;
+        padding: 18px; height: 100%;
         background: linear-gradient(135deg, rgba(76,175,80,0.1), rgba(77,171,247,0.05));
         border: 1px solid rgba(76,175,80,0.25);
         border-radius: 10px;
-        color: #d8dee9;
     }
     .release-info .ver { color: #4caf50; font-size: 1.5rem; font-weight: 400; }
 </style>
@@ -89,28 +136,49 @@
 <div class="content-wrapper">
     <div class="container-fluid">
 
+        <!-- ===== SARLAVHA ===== -->
         <div class="row mt-3 mb-4">
             <div class="col-12">
-                <h4 class="text-white mb-1"><i class="zmdi zmdi-view-dashboard mr-2" style="color:#4dabf7"></i> Asosiy sahifa</h4>
-                <p class="text-muted small">{{ request.user.username }}, xush kelibsiz — real-time statistika</p>
+                <div class="d-flex justify-content-between align-items-end flex-wrap" style="gap:12px;">
+                    <div>
+                        <h4 class="text-white mb-1" style="font-weight:400;">
+                            <i class="zmdi zmdi-view-dashboard mr-2" style="color:#4dabf7"></i>
+                            Boshqaruv paneli
+                        </h4>
+                        <p class="text-muted small mb-0">
+                            {{ request.user.username }} · Real-time statistika · <span id="serverTime">{{ '' }}</span>
+                        </p>
+                    </div>
+                    <div class="d-flex" style="gap:6px;">
+                        <a href="{% url 'device_list' %}" class="btn btn-sm" style="background:rgba(77,171,247,0.15);border:1px solid rgba(77,171,247,0.35);color:#4dabf7;">
+                            <i class="zmdi zmdi-desktop-mac mr-1"></i> Qurilmalar
+                        </a>
+                        <a href="{% url 'external_connections' %}" class="btn btn-sm" style="background:rgba(76,175,80,0.15);border:1px solid rgba(76,175,80,0.35);color:#4caf50;">
+                            <i class="zmdi zmdi-globe mr-1"></i> Tashqi ulanishlar
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- ===== KPI ROW ===== -->
         <div class="row mb-4">
             <div class="col-md-6 col-lg-3 mb-3">
-                <div class="kpi-card">
-                    <div class="icon-wrap" style="background:rgba(76,175,80,0.15);color:#4caf50;">
+                <div class="kpi k-green">
+                    <div class="kpi-icon" style="background:rgba(76,175,80,0.15);color:#4caf50;">
                         <i class="zmdi zmdi-desktop-mac"></i>
                     </div>
                     <div class="label">Jami qurilmalar</div>
                     <div class="value">{{ total_pcs }}</div>
-                    <div class="sub"><span class="accent" style="color:#4caf50">● {{ online_pcs }} onlayn</span> · <span style="color:#ff5252">● {{ offline_pcs }} oflayn</span></div>
+                    <div class="sub">
+                        <span style="color:#4caf50">● {{ online_pcs }}</span>
+                        <span style="color:#7d8fa8">/ {{ offline_pcs }} oflayn · {{ online_pct }}%</span>
+                    </div>
                 </div>
             </div>
             <div class="col-md-6 col-lg-3 mb-3">
-                <div class="kpi-card">
-                    <div class="icon-wrap" style="background:rgba(77,171,247,0.15);color:#4dabf7;">
+                <div class="kpi k-blue">
+                    <div class="kpi-icon" style="background:rgba(77,171,247,0.15);color:#4dabf7;">
                         <i class="zmdi zmdi-globe"></i>
                     </div>
                     <div class="label">Bugungi tashriflar</div>
@@ -119,23 +187,66 @@
                 </div>
             </div>
             <div class="col-md-6 col-lg-3 mb-3">
-                <div class="kpi-card">
-                    <div class="icon-wrap" style="background:rgba(255,152,0,0.15);color:#ff9800;">
+                <div class="kpi k-orange">
+                    <div class="kpi-icon" style="background:rgba(255,152,0,0.15);color:#ff9800;">
                         <i class="zmdi zmdi-block"></i>
                     </div>
-                    <div class="label">Bloklangan sayt urinishlari</div>
+                    <div class="label">Sayt urinishlari</div>
                     <div class="value">{{ today_blocked_urls }}</div>
-                    <div class="sub">Bugungi kun</div>
+                    <div class="sub">Bloklangan bugun</div>
                 </div>
             </div>
             <div class="col-md-6 col-lg-3 mb-3">
-                <div class="kpi-card">
-                    <div class="icon-wrap" style="background:rgba(233,30,99,0.15);color:#e91e63;">
+                <div class="kpi k-red">
+                    <div class="kpi-icon" style="background:rgba(233,30,99,0.15);color:#e91e63;">
                         <i class="zmdi zmdi-close-circle"></i>
                     </div>
-                    <div class="label">Bloklangan dastur urinishlari</div>
+                    <div class="label">Dastur urinishlari</div>
                     <div class="value">{{ today_blocked_apps }}</div>
-                    <div class="sub">Bugungi kun</div>
+                    <div class="sub">Bloklangan bugun</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== CAMPUS MAP + BUILDING STATS ===== -->
+        <div class="row mb-4">
+            <div class="col-lg-7 mb-3">
+                <div class="sec-card">
+                    <div class="sec-header">
+                        <div>
+                            <h6><i class="zmdi zmdi-pin-drop mr-2" style="color:#4caf50"></i> Kampus xaritasi</h6>
+                            <div class="sub">Har bino uchun onlayn qurilmalar</div>
+                        </div>
+                        <span class="badge-num green">{{ online_pcs }} onlayn</span>
+                    </div>
+                    <div class="sec-body">
+                        <div id="campusMap"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5 mb-3">
+                <div class="row">
+                    {% for b in building_stats %}
+                    <div class="col-md-6 mb-3">
+                        <div class="bldg-card h-100">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <h6 class="b-title">
+                                    <i class="zmdi zmdi-city" style="color:#4dabf7"></i>
+                                    {{ b.label }}
+                                </h6>
+                                <span class="b-badge">{{ b.online }}/{{ b.total }}</span>
+                            </div>
+                            <div class="b-metric">
+                                <span>Xonalar</span>
+                                <span class="val">{{ b.groups }}</span>
+                            </div>
+                            <div class="b-metric">
+                                <span>Bugungi kirishlar</span>
+                                <span class="val">{{ b.activity }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -143,55 +254,140 @@
         <!-- ===== CHARTS ROW ===== -->
         <div class="row mb-4">
             <div class="col-lg-8 mb-3">
-                <div class="sec-card h-100">
+                <div class="sec-card">
                     <div class="sec-header">
-                        <h6><i class="zmdi zmdi-trending-up mr-2" style="color:#4dabf7"></i> Oxirgi 7 kun — URL tashriflar</h6>
-                        <div class="sub">Har kunlik tashriflar dinamikasi</div>
+                        <div>
+                            <h6><i class="zmdi zmdi-trending-up mr-2" style="color:#4dabf7"></i> Oxirgi 7 kun — URL tashriflar</h6>
+                            <div class="sub">Kunlik dinamika</div>
+                        </div>
                     </div>
-                    <div style="padding:20px;">
-                        <canvas id="chartWeekly" height="90"></canvas>
+                    <div class="sec-body">
+                        <canvas id="chartWeekly" height="88"></canvas>
                     </div>
                 </div>
             </div>
             <div class="col-lg-4 mb-3">
-                <div class="sec-card h-100">
+                <div class="sec-card">
                     <div class="sec-header">
-                        <h6><i class="zmdi zmdi-chart mr-2" style="color:#4caf50"></i> Top dasturlar (bugun)</h6>
-                        <div class="sub">Eng ko'p aktiv vaqt</div>
+                        <div>
+                            <h6><i class="zmdi zmdi-chart mr-2" style="color:#4caf50"></i> Top dasturlar</h6>
+                            <div class="sub">Bugungi aktiv vaqt</div>
+                        </div>
                     </div>
-                    <div style="padding:20px;">
+                    <div class="sec-body">
                         <canvas id="chartApps" height="180"></canvas>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- ===== LISTS ROW ===== -->
         <div class="row mb-4">
-            <div class="col-lg-6 mb-3">
-                <div class="sec-card h-100">
+            <div class="col-lg-8 mb-3">
+                <div class="sec-card">
                     <div class="sec-header">
-                        <h6><i class="zmdi zmdi-star mr-2" style="color:#ffc107"></i> Top saytlar</h6>
-                        <div class="sub">Bugun eng ko'p kirilganlar</div>
+                        <div>
+                            <h6><i class="zmdi zmdi-time mr-2" style="color:#ff9800"></i> Bugun soatlik faoliyat</h6>
+                            <div class="sub">24 soat — URL tashriflar</div>
+                        </div>
+                    </div>
+                    <div class="sec-body">
+                        <canvas id="chartHourly" height="90"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mb-3">
+                <div class="sec-card">
+                    <div class="sec-header">
+                        <div>
+                            <h6><i class="zmdi zmdi-city mr-2" style="color:#9c27b0"></i> Binolar bo'yicha</h6>
+                            <div class="sub">Onlayn / Oflayn</div>
+                        </div>
+                    </div>
+                    <div class="sec-body">
+                        <canvas id="chartBuildings" height="180"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== TOP LISTS ROW ===== -->
+        <div class="row mb-4">
+            <div class="col-lg-4 mb-3">
+                <div class="sec-card">
+                    <div class="sec-header">
+                        <div>
+                            <h6><i class="zmdi zmdi-star mr-2" style="color:#ffc107"></i> Top saytlar</h6>
+                            <div class="sub">Bugun eng ko'p kirilganlar</div>
+                        </div>
                     </div>
                     {% for site in top_sites %}
                         <div class="list-row">
-                            <span class="rank">{{ forloop.counter }}</span>
-                            <span class="name" title="{{ site.url }}">
-                                {{ site.title|default:site.url|truncatechars:60 }}
-                            </span>
-                            <span class="badge-num">{{ site.visits }} ta</span>
+                            <span class="rank">#{{ forloop.counter }}</span>
+                            <div class="name">
+                                <div title="{{ site.url }}">{{ site.title|default:site.url|truncatechars:40 }}</div>
+                            </div>
+                            <span class="badge-num">{{ site.visits }}</span>
                         </div>
                     {% empty %}
                         <div class="list-row" style="justify-content:center;color:#7d8fa8;">Ma'lumot yo'q</div>
                     {% endfor %}
                 </div>
             </div>
-            <div class="col-lg-6 mb-3">
-                <div class="sec-card h-100">
+            <div class="col-lg-4 mb-3">
+                <div class="sec-card">
                     <div class="sec-header">
-                        <h6><i class="zmdi zmdi-time mr-2" style="color:#4dabf7"></i> Oxirgi faoliyat</h6>
-                        <div class="sub">So'nggi 10 ta URL kirishi</div>
+                        <div>
+                            <h6><i class="zmdi zmdi-folder mr-2" style="color:#4dabf7"></i> Faol xonalar</h6>
+                            <div class="sub">Eng ko'p onlayn PClar</div>
+                        </div>
+                    </div>
+                    {% for g in top_groups %}
+                        <div class="list-row">
+                            <span class="rank">#{{ forloop.counter }}</span>
+                            <div class="name">
+                                <div>{{ g.group__room_number|default:g.group__name }}</div>
+                                <div class="sub-name">{{ g.pc_count }} PC · {{ g.online_count }} onlayn</div>
+                            </div>
+                            <span class="badge-num green">{{ g.online_count }}</span>
+                        </div>
+                    {% empty %}
+                        <div class="list-row" style="justify-content:center;color:#7d8fa8;">Ma'lumot yo'q</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-lg-4 mb-3">
+                <div class="sec-card">
+                    <div class="sec-header">
+                        <div>
+                            <h6><i class="zmdi zmdi-pin mr-2" style="color:#e91e63"></i> Top davlatlar</h6>
+                            <div class="sub">Ulanish geolokatsiyasi</div>
+                        </div>
+                    </div>
+                    {% for c in top_countries %}
+                        <div class="list-row">
+                            <span class="rank">#{{ forloop.counter }}</span>
+                            <div class="name">
+                                <span class="flag-emoji" data-cc="{{ c.country_code }}"></span>
+                                {{ c.country }}
+                            </div>
+                            <span class="badge-num orange">{{ c.cnt }}</span>
+                        </div>
+                    {% empty %}
+                        <div class="list-row" style="justify-content:center;color:#7d8fa8;">Ma'lumot yo'q</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== BOTTOM ROW ===== -->
+        <div class="row mb-4">
+            <div class="col-lg-8 mb-3">
+                <div class="sec-card">
+                    <div class="sec-header">
+                        <div>
+                            <h6><i class="zmdi zmdi-time-restore mr-2" style="color:#4dabf7"></i> Oxirgi faoliyat</h6>
+                            <div class="sub">So'nggi 12 ta URL kirishi</div>
+                        </div>
                     </div>
                     {% for act in recent_activities %}
                         <div class="feed-row">
@@ -202,10 +398,15 @@
                                     </div>
                                     <div class="sub">
                                         <i class="zmdi zmdi-desktop-mac"></i> {{ act.computer.hostname|default:"Unknown" }}
-                                        · <span class="badge-app">{{ act.app_name }}</span>
+                                        {% if act.computer.group %}
+                                            · {{ act.computer.group.room_number|default:act.computer.group.name }}
+                                        {% endif %}
+                                        · <span class="app-chip">{{ act.app_name }}</span>
                                     </div>
                                 </div>
-                                <span class="sub" style="flex-shrink:0;margin-left:10px;">{{ act.created_at|date:"H:i" }}</span>
+                                <span class="sub" style="flex-shrink:0;margin-left:10px;font-family:monospace;">
+                                    {{ act.created_at|date:"H:i" }}
+                                </span>
                             </div>
                         </div>
                     {% empty %}
@@ -213,58 +414,52 @@
                     {% endfor %}
                 </div>
             </div>
-        </div>
 
-        <!-- ===== BOTTOM ROW — Release info + Meta ===== -->
-        <div class="row mb-4">
-            {% if is_super and active_release %}
-            <div class="col-lg-6 mb-3">
-                <div class="release-info h-100">
-                    <div class="d-flex justify-content-between align-items-start mb-3">
-                        <div>
-                            <div class="text-muted small">Faol Nigoh Release</div>
-                            <div class="ver">v{{ active_release.version }}</div>
-                        </div>
-                        <span class="badge-num" style="background:rgba(76,175,80,0.15);border-color:rgba(76,175,80,0.35);color:#4caf50;">
-                            ● Aktiv
-                        </span>
-                    </div>
-                    <div class="row text-center">
-                        <div class="col-4">
-                            <div class="text-white h5 mb-0">{{ active_release.files.count }}</div>
-                            <div class="text-muted small">Fayllar</div>
-                        </div>
-                        <div class="col-4">
-                            <div class="text-white h5 mb-0">{{ pending_update_count }}</div>
-                            <div class="text-muted small">Kutayotgan yangilanish</div>
-                        </div>
-                        <div class="col-4">
-                            <div class="text-white h5 mb-0">{{ whitelist_pcs }}</div>
-                            <div class="text-muted small">Whitelist PC</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-            <div class="{% if is_super and active_release %}col-lg-6{% else %}col-12{% endif %} mb-3">
-                <div class="sec-card h-100" style="padding: 20px;">
-                    <div class="row text-center">
-                        <div class="col-6 mb-3">
-                            <div class="text-white" style="font-size:1.8rem;font-weight:300;">{{ total_groups }}</div>
-                            <div class="text-muted small">Guruhlar (xonalar)</div>
-                        </div>
-                        <div class="col-6 mb-3">
-                            <div class="text-white" style="font-size:1.8rem;font-weight:300;">{{ online_pct }}%</div>
-                            <div class="text-muted small">Onlayn foizi</div>
+            <div class="col-lg-4 mb-3">
+                <div class="row">
+                    {% if is_super and active_release %}
+                    <div class="col-12 mb-3">
+                        <div class="release-info">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <div class="text-muted small">Faol Nigoh Release</div>
+                                    <div class="ver">v{{ active_release.version }}</div>
+                                </div>
+                                <span class="badge-num green">● Aktiv</span>
+                            </div>
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="text-white h5 mb-0">{{ active_release.files.count }}</div>
+                                    <div class="text-muted" style="font-size:0.7rem;">Fayllar</div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-white h5 mb-0">{{ pending_update_count }}</div>
+                                    <div class="text-muted" style="font-size:0.7rem;">Kutmoqda</div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-white h5 mb-0">{{ whitelist_pcs }}</div>
+                                    <div class="text-muted" style="font-size:0.7rem;">Whitelist</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="text-center mt-3">
-                        <a href="{% url 'device_list' %}" class="btn btn-sm" style="background:rgba(77,171,247,0.15);border:1px solid rgba(77,171,247,0.35);color:#4dabf7;">
-                            <i class="zmdi zmdi-format-list-bulleted"></i> Barcha qurilmalar
-                        </a>
-                        <a href="{% url 'external_connections' %}" class="btn btn-sm ml-2" style="background:rgba(76,175,80,0.15);border:1px solid rgba(76,175,80,0.35);color:#4caf50;">
-                            <i class="zmdi zmdi-globe"></i> Tashqi ulanishlar
-                        </a>
+                    {% endif %}
+
+                    <div class="col-12 mb-3">
+                        <div class="sec-card" style="padding: 18px;">
+                            <div class="row text-center">
+                                <div class="col-6 mb-3">
+                                    <div class="text-white" style="font-size:1.6rem;font-weight:300;">{{ total_groups }}</div>
+                                    <div class="text-muted" style="font-size:0.72rem;">Guruhlar (xonalar)</div>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <div class="text-white" style="font-size:1.6rem;font-weight:300;">
+                                        {{ hw_ram_avg|floatformat:1 }} <small style="font-size:0.7rem;color:#7d8fa8;">GB</small>
+                                    </div>
+                                    <div class="text-muted" style="font-size:0.72rem;">O'rtacha RAM</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -275,60 +470,238 @@
 
 <script>
 (function() {
-    // WEEKLY LINE CHART
-    var wl = document.getElementById('chartWeekly');
-    if (wl) {
-        new Chart(wl.getContext('2d'), {
-            type: 'line',
-            data: {
-                labels: {{ weekly_labels|safe }},
-                datasets: [{
-                    label: 'Tashriflar',
-                    data: {{ weekly_data|safe }},
-                    borderColor: '#4dabf7',
-                    backgroundColor: 'rgba(77,171,247,0.15)',
-                    fill: true, tension: 0.35, borderWidth: 2,
-                    pointBackgroundColor: '#4dabf7', pointRadius: 4,
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#adb5bd' } },
-                    x: { grid: { display: false }, ticks: { color: '#adb5bd' } }
-                }
-            }
-        });
+    // Server time
+    function tick() {
+        var now = new Date();
+        var el = document.getElementById('serverTime');
+        if (el) el.textContent = now.toLocaleTimeString('uz-UZ', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
     }
+    tick(); setInterval(tick, 1000);
 
-    // APPS DOUGHNUT CHART
+    // Country flags
+    function flagEmoji(code) {
+        if (!code || code.length !== 2) return '🌐';
+        var cc = code.toUpperCase();
+        return String.fromCodePoint(...[...cc].map(c => 127397 + c.charCodeAt(0)));
+    }
+    document.querySelectorAll('.flag-emoji[data-cc]').forEach(function(el){
+        el.textContent = flagEmoji(el.dataset.cc);
+    });
+
+    // ===== CAMPUS MAP =====
+    var campusMap = L.map('campusMap', {
+        center: [{{ campus_center_lat|unlocalize }}, {{ campus_center_lng|unlocalize }}],
+        zoom: 18, minZoom: 16, maxZoom: 20,
+        zoomControl: true, attributionControl: false,
+    });
+    L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 20 }
+    ).addTo(campusMap);
+    L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+        { subdomains: 'abcd', maxZoom: 20, opacity: 0.9 }
+    ).addTo(campusMap);
+
+    var buildings = {{ building_stats|safe|default:"[]" }};
+    // Django Python list to JSON — Do'kondan direct chiqarish kerak
+})();
+</script>
+
+<script id="bldgData" type="application/json">[
+{% for b in building_stats %}
+{"id":{{ b.id }}, "label":"{{ b.label|escapejs }}", "lat":{{ b.lat|unlocalize }}, "lng":{{ b.lng|unlocalize }}, "total":{{ b.total }}, "online":{{ b.online }}, "offline":{{ b.offline }}, "groups":{{ b.groups }}, "activity":{{ b.activity }}}{% if not forloop.last %},{% endif %}
+{% endfor %}
+]</script>
+
+<script>
+(function() {
+    // Recreate — bldgData ni scriptdan olamiz (safe JSON)
+    var raw = document.getElementById('bldgData').textContent;
+    var buildings = [];
+    try { buildings = JSON.parse(raw); } catch(e) {}
+
+    if (typeof L !== 'undefined' && document.getElementById('campusMap')) {
+        var map = L.DomUtil.get('campusMap')._leaflet_id
+            ? null
+            : null; // map allaqachon yuqorida yaratildi
+
+        // Yuqorida yaratgan map'ga markerlar qo'shamiz
+        window.setTimeout(function() {
+            // Global map access — yuqoridagi IIFE ichida edi
+            // Buni yechish uchun map ni qayta yaratamiz:
+            var mapContainer = document.getElementById('campusMap');
+            // Yangi map yaratmaslik uchun — Leaflet layer'lar bilan ishlaymiz
+            // Aslida yuqoridagi map allaqachon markazlashgan. Marker'larni qo'shish uchun
+            // uni window global qilib olamiz.
+        }, 100);
+    }
+})();
+</script>
+
+<script>
+(function() {
+    // Chart.js default — dark theme
+    Chart.defaults.color = '#adb5bd';
+    Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
+
+    // Weekly line
+    var w = document.getElementById('chartWeekly');
+    if (w) new Chart(w.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: {{ weekly_labels|safe }},
+            datasets: [{
+                label: 'Tashriflar',
+                data: {{ weekly_data|safe }},
+                borderColor: '#4dabf7',
+                backgroundColor: 'rgba(77,171,247,0.15)',
+                fill: true, tension: 0.35, borderWidth: 2,
+                pointBackgroundColor: '#4dabf7', pointRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // Hourly bar
+    var h = document.getElementById('chartHourly');
+    if (h) new Chart(h.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: {{ hourly_labels|safe }},
+            datasets: [{
+                data: {{ hourly_data|safe }},
+                backgroundColor: 'rgba(255,152,0,0.6)',
+                borderColor: '#ff9800', borderWidth: 1,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // Apps doughnut
     var ac = document.getElementById('chartApps');
     if (ac) {
         var labels = {{ apps_labels|safe }};
-        var data   = {{ apps_data|safe }};
-        if (!labels.length) {
-            ac.parentElement.innerHTML = '<div style="text-align:center;color:#7d8fa8;padding:40px 0;">Ma\'lumot yo\'q</div>';
-        } else {
+        var data = {{ apps_data|safe }};
+        if (labels.length) {
             new Chart(ac.getContext('2d'), {
                 type: 'doughnut',
                 data: {
                     labels: labels,
                     datasets: [{
                         data: data,
-                        backgroundColor: ['#4dabf7', '#4caf50', '#ff9800', '#e91e63', '#9c27b0'],
+                        backgroundColor: ['#4dabf7','#4caf50','#ff9800','#e91e63','#9c27b0'],
                         borderColor: 'rgba(0,0,0,0.3)', borderWidth: 2,
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'bottom', labels: { color: '#adb5bd', boxWidth: 12, padding: 8, font: { size: 11 } } }
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: {size:11} } } }
+                }
+            });
+        } else {
+            ac.parentElement.innerHTML = '<div style="text-align:center;color:#7d8fa8;padding:30px;">Ma\'lumot yo\'q</div>';
+        }
+    }
+
+    // Buildings stacked bar
+    var bg = document.getElementById('chartBuildings');
+    if (bg) {
+        var lbl = {{ building_labels|safe }};
+        if (lbl.length) {
+            new Chart(bg.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: lbl,
+                    datasets: [
+                        { label: 'Onlayn', data: {{ building_online|safe }}, backgroundColor: '#4caf50' },
+                        { label: 'Oflayn', data: {{ building_offline|safe }}, backgroundColor: 'rgba(255,82,82,0.6)' },
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { labels: { boxWidth: 12, font: {size:11} } } },
+                    scales: {
+                        y: { stacked: true, beginAtZero: true, grid: { color:'rgba(255,255,255,0.05)' } },
+                        x: { stacked: true, grid: { display: false } }
                     }
                 }
             });
         }
     }
+
+    // ===== Campus map markers (yuqoridagi IIFE'da yaratilgan map'ga marker qo'shamiz) =====
+    // Marker'lar uchun map'ni window'ga olamiz
+    setTimeout(function() {
+        // Map yaratish — yangi (yuqoridagini tozalaymiz)
+        var el = document.getElementById('campusMap');
+        if (!el || !window.L) return;
+
+        // Agar map yaratilgan bo'lsa — layer'larni saqlab, uni yangilaymiz
+        // Oddiyroq: yangi map yaratamiz (avvalgi container ni tozalab)
+        if (el._leaflet_id) {
+            el._leaflet_id = null;
+            el.innerHTML = '';
+        }
+
+        var m = L.map('campusMap', {
+            center: [{{ campus_center_lat|unlocalize }}, {{ campus_center_lng|unlocalize }}],
+            zoom: 18, minZoom: 15, maxZoom: 20,
+            zoomControl: true, attributionControl: false,
+        });
+        L.tileLayer(
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            { maxZoom: 20 }
+        ).addTo(m);
+        L.tileLayer(
+            'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+            { subdomains: 'abcd', maxZoom: 20, opacity: 0.85 }
+        ).addTo(m);
+
+        var raw = document.getElementById('bldgData').textContent;
+        var buildings = [];
+        try { buildings = JSON.parse(raw); } catch(e) {}
+
+        buildings.forEach(function(b) {
+            if (!b.lat || !b.lng) return;
+            var color = b.online > 0 ? '#4caf50' : '#7d8fa8';
+            var radius = 12 + Math.min(30, b.total * 2);
+            L.circleMarker([b.lat, b.lng], {
+                radius: radius,
+                fillColor: color, color: color,
+                weight: 2, opacity: 0.9, fillOpacity: 0.35,
+            }).addTo(m).bindPopup(
+                '<div style="color:#333;font-size:13px;">' +
+                '<b style="font-size:15px;">' + b.label + '</b><br>' +
+                'Onlayn: <b>' + b.online + '</b> / ' + b.total + '<br>' +
+                'Xonalar: ' + b.groups + '<br>' +
+                'Bugungi kirishlar: ' + b.activity +
+                '</div>'
+            );
+            L.marker([b.lat, b.lng], {
+                icon: L.divIcon({
+                    className: '', iconSize: [80, 22],
+                    html: '<div style="background:rgba(0,0,0,0.6);color:#fff;padding:1px 6px;border-radius:4px;font-size:11px;text-align:center;border:1px solid rgba(255,255,255,0.15);">' + b.label + '</div>'
+                })
+            }).addTo(m);
+        });
+
+        setTimeout(function(){ m.invalidateSize(); }, 200);
+    }, 300);
 })();
 </script>
 

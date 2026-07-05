@@ -4,7 +4,8 @@ from django.contrib.auth import authenticate, login as auth_login
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.core.paginator import Paginator
-from django.db.models import Q, Sum, Count, Prefetch
+from django.db.models import Q, Sum, Count, Prefetch, Avg
+from django.db import models
 from endpoints.models import Group, Computer # BuildingNumber modelingizni import qiling
 from tracking.models import RemoteControlSession
 from endpoints.choices import BuildingNumber, Floor
@@ -83,17 +84,15 @@ def logout_view(request):
 
 
 def home(request):
-    """Bosh sahifa — asosiy statistikalar dashboard."""
-    from collections import Counter as _Counter
+    """Bosh sahifa — kengaytirilgan dashboard: KPI, xarita, chartlar, statistika."""
     from django.db.models import Sum, Count
 
     now = timezone.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start = today_start - timedelta(days=6)   # oxirgi 7 kun (bugun bilan)
 
     is_super = request.user.is_superuser
 
-    # Whitelist filter — oddiy admin uchun exclude
+    # Whitelist filter
     computer_qs = Computer.objects.all()
     if not is_super:
         computer_qs = computer_qs.filter(is_whitelisted=False)
@@ -102,13 +101,11 @@ def home(request):
     online_pcs = computer_qs.filter(is_online=True).count()
     offline_pcs = total_pcs - online_pcs
     whitelist_pcs = Computer.objects.filter(is_whitelisted=True).count() if is_super else 0
-
     total_groups = Group.objects.count()
 
-    # Ko'rinadigan PC ID lar (whitelist bo'lmaganlar oddiy admin uchun)
     visible_ids = list(computer_qs.values_list('id', flat=True))
 
-    # Bugungi ma'lumotlar
+    # Bugungi ma'lumot
     today_activities = ActivityLog.objects.filter(
         computer_id__in=visible_ids, created_at__gte=today_start,
     )
@@ -120,7 +117,7 @@ def home(request):
         computer_id__in=visible_ids, created_at__gte=today_start,
     ).aggregate(total=Sum('attempts_count'))['total'] or 0
 
-    # Top 5 bugungi saytlar (URL bo'yicha)
+    # Top 5 saytlar (bugun)
     top_sites = list(
         today_activities.exclude(url__isnull=True).exclude(url='')
         .values('url', 'title')
@@ -128,7 +125,7 @@ def home(request):
         .order_by('-visits')[:5]
     )
 
-    # Top 5 bugungi dasturlar (aktiv vaqt bo'yicha)
+    # Top 5 dasturlar (bugun)
     top_apps = list(
         AppUsageStatistic.objects.filter(
             computer_id__in=visible_ids, created_at__gte=today_start,
@@ -138,7 +135,7 @@ def home(request):
         .order_by('-total_sec')[:5]
     )
 
-    # Oxirgi 7 kunlik aktivlik grafigi
+    # Oxirgi 7 kunlik aktivlik
     weekly_activity = []
     for i in range(6, -1, -1):
         day = today_start - timedelta(days=i)
@@ -152,15 +149,70 @@ def home(request):
             'count': count,
         })
 
-    # Oxirgi faoliyat feed (10 ta)
+    # Bugungi soatlik aktivlik (24 soat)
+    hourly_activity = [0] * 24
+    hourly_qs = today_activities.extra(
+        select={'hour': "EXTRACT(hour FROM created_at)"},
+    ).values('hour').annotate(cnt=Count('id'))
+    for row in hourly_qs:
+        h = int(row['hour'] or 0)
+        if 0 <= h < 24:
+            hourly_activity[h] = row['cnt']
+
+    # ===== BUILDING STATS =====
+    # Har bino uchun: PC soni, online, guruh soni
+    building_stats = []
+    for bid, origin in BUILDING_ORIGINS.items():
+        pcs = computer_qs.filter(group__building=bid)
+        total = pcs.count()
+        online = pcs.filter(is_online=True).count()
+        groups_in_bldg = Group.objects.filter(building=bid).count()
+        today_acts = ActivityLog.objects.filter(
+            computer_id__in=pcs.values_list('id', flat=True),
+            created_at__gte=today_start,
+        ).count()
+        building_stats.append({
+            'id': bid,
+            'label': origin['label'],
+            'lat': origin['lat'],
+            'lng': origin['lng'],
+            'total': total,
+            'online': online,
+            'offline': total - online,
+            'groups': groups_in_bldg,
+            'activity': today_acts,
+        })
+
+    # ===== TOP GROUPS (xonalar) =====
+    top_groups = list(
+        computer_qs.filter(group__isnull=False)
+        .values('group__id', 'group__name', 'group__room_number', 'group__building', 'group__floor')
+        .annotate(pc_count=Count('id'), online_count=Count('id', filter=models.Q(is_online=True)))
+        .order_by('-online_count', '-pc_count')[:5]
+    )
+
+    # ===== TOP DAVLATLAR (geo cache dan) =====
+    try:
+        from tracking.models import URLGeoCache
+        top_countries = list(
+            URLGeoCache.objects.filter(failed=False)
+            .exclude(country='')
+            .values('country', 'country_code')
+            .annotate(cnt=Count('id'))
+            .order_by('-cnt')[:5]
+        )
+    except Exception:
+        top_countries = []
+
+    # Oxirgi faoliyat feed
     recent_activities = list(
         ActivityLog.objects.filter(computer_id__in=visible_ids)
         .exclude(url__isnull=True).exclude(url='')
-        .select_related('computer')
-        .order_by('-created_at')[:10]
+        .select_related('computer', 'computer__group')
+        .order_by('-created_at')[:12]
     )
 
-    # Faol Release info (superuser uchun)
+    # Release info
     active_release = None
     pending_update_count = 0
     if is_super:
@@ -176,13 +228,23 @@ def home(request):
         except Exception:
             pass
 
-    # Chart data — JSON
-    weekly_labels = json.dumps([d['date'] for d in weekly_activity])
-    weekly_data   = json.dumps([d['count'] for d in weekly_activity])
-    apps_labels   = json.dumps([a['app_name'] for a in top_apps])
-    apps_data     = json.dumps([a['total_sec'] or 0 for a in top_apps])
+    # Hardware overview — average CPU/RAM among online agents
+    hw_ram_avg = computer_qs.filter(is_online=True).aggregate(avg=models.Avg('ram_gb'))['avg'] or 0
 
     online_pct = round((online_pcs / total_pcs * 100) if total_pcs else 0)
+
+    # JSON chart data
+    weekly_labels = json.dumps([d['date'] for d in weekly_activity])
+    weekly_data   = json.dumps([d['count'] for d in weekly_activity])
+    hourly_labels = json.dumps([f"{h:02d}:00" for h in range(24)])
+    hourly_data   = json.dumps(hourly_activity)
+    apps_labels   = json.dumps([a['app_name'] for a in top_apps])
+    apps_data     = json.dumps([a['total_sec'] or 0 for a in top_apps])
+    building_labels = json.dumps([b['label'] for b in building_stats])
+    building_online = json.dumps([b['online'] for b in building_stats])
+    building_offline = json.dumps([b['offline'] for b in building_stats])
+    campus_center_lat = SERVER_ORIGIN['lat']
+    campus_center_lng = SERVER_ORIGIN['lng']
 
     context = {
         'total_pcs': total_pcs,
@@ -196,13 +258,24 @@ def home(request):
         'today_blocked_apps': today_blocked_apps,
         'top_sites': top_sites,
         'top_apps': top_apps,
+        'top_groups': top_groups,
+        'top_countries': top_countries,
+        'building_stats': building_stats,
         'weekly_labels': weekly_labels,
         'weekly_data': weekly_data,
+        'hourly_labels': hourly_labels,
+        'hourly_data': hourly_data,
         'apps_labels': apps_labels,
         'apps_data': apps_data,
+        'building_labels': building_labels,
+        'building_online': building_online,
+        'building_offline': building_offline,
+        'campus_center_lat': campus_center_lat,
+        'campus_center_lng': campus_center_lng,
         'recent_activities': recent_activities,
         'active_release': active_release,
         'pending_update_count': pending_update_count,
+        'hw_ram_avg': hw_ram_avg,
         'is_super': is_super,
     }
     return render(request, 'menu/home/dashboard.html', context)
