@@ -83,7 +83,129 @@ def logout_view(request):
 
 
 def home(request):
-    return render(request, 'base/base.html')
+    """Bosh sahifa — asosiy statistikalar dashboard."""
+    from collections import Counter as _Counter
+    from django.db.models import Sum, Count
+
+    now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=6)   # oxirgi 7 kun (bugun bilan)
+
+    is_super = request.user.is_superuser
+
+    # Whitelist filter — oddiy admin uchun exclude
+    computer_qs = Computer.objects.all()
+    if not is_super:
+        computer_qs = computer_qs.filter(is_whitelisted=False)
+
+    total_pcs = computer_qs.count()
+    online_pcs = computer_qs.filter(is_online=True).count()
+    offline_pcs = total_pcs - online_pcs
+    whitelist_pcs = Computer.objects.filter(is_whitelisted=True).count() if is_super else 0
+
+    total_groups = Group.objects.count()
+
+    # Ko'rinadigan PC ID lar (whitelist bo'lmaganlar oddiy admin uchun)
+    visible_ids = list(computer_qs.values_list('id', flat=True))
+
+    # Bugungi ma'lumotlar
+    today_activities = ActivityLog.objects.filter(
+        computer_id__in=visible_ids, created_at__gte=today_start,
+    )
+    today_url_visits = today_activities.exclude(url__isnull=True).exclude(url='').count()
+    today_blocked_urls = BlockedAttemptLog.objects.filter(
+        computer_id__in=visible_ids, created_at__gte=today_start,
+    ).aggregate(total=Sum('attempts_count'))['total'] or 0
+    today_blocked_apps = ProcessAlertLog.objects.filter(
+        computer_id__in=visible_ids, created_at__gte=today_start,
+    ).aggregate(total=Sum('attempts_count'))['total'] or 0
+
+    # Top 5 bugungi saytlar (URL bo'yicha)
+    top_sites = list(
+        today_activities.exclude(url__isnull=True).exclude(url='')
+        .values('url', 'title')
+        .annotate(visits=Count('id'), total_sec=Sum('duration_seconds'))
+        .order_by('-visits')[:5]
+    )
+
+    # Top 5 bugungi dasturlar (aktiv vaqt bo'yicha)
+    top_apps = list(
+        AppUsageStatistic.objects.filter(
+            computer_id__in=visible_ids, created_at__gte=today_start,
+        )
+        .values('app_name')
+        .annotate(total_sec=Sum('active_seconds'))
+        .order_by('-total_sec')[:5]
+    )
+
+    # Oxirgi 7 kunlik aktivlik grafigi
+    weekly_activity = []
+    for i in range(6, -1, -1):
+        day = today_start - timedelta(days=i)
+        next_day = day + timedelta(days=1)
+        count = ActivityLog.objects.filter(
+            computer_id__in=visible_ids,
+            created_at__gte=day, created_at__lt=next_day,
+        ).count()
+        weekly_activity.append({
+            'date': day.strftime('%d %b'),
+            'count': count,
+        })
+
+    # Oxirgi faoliyat feed (10 ta)
+    recent_activities = list(
+        ActivityLog.objects.filter(computer_id__in=visible_ids)
+        .exclude(url__isnull=True).exclude(url='')
+        .select_related('computer')
+        .order_by('-created_at')[:10]
+    )
+
+    # Faol Release info (superuser uchun)
+    active_release = None
+    pending_update_count = 0
+    if is_super:
+        try:
+            from commands.models import Release, PendingCommand
+            active_release = Release.objects.filter(
+                target=Release.TARGET_NIGOH, is_active=True
+            ).order_by('-created_at').first()
+            pending_update_count = PendingCommand.objects.filter(
+                action=PendingCommand.ACTION_UPDATE,
+                acknowledged_at__isnull=True,
+            ).count()
+        except Exception:
+            pass
+
+    # Chart data — JSON
+    weekly_labels = json.dumps([d['date'] for d in weekly_activity])
+    weekly_data   = json.dumps([d['count'] for d in weekly_activity])
+    apps_labels   = json.dumps([a['app_name'] for a in top_apps])
+    apps_data     = json.dumps([a['total_sec'] or 0 for a in top_apps])
+
+    online_pct = round((online_pcs / total_pcs * 100) if total_pcs else 0)
+
+    context = {
+        'total_pcs': total_pcs,
+        'online_pcs': online_pcs,
+        'offline_pcs': offline_pcs,
+        'online_pct': online_pct,
+        'whitelist_pcs': whitelist_pcs,
+        'total_groups': total_groups,
+        'today_url_visits': today_url_visits,
+        'today_blocked_urls': today_blocked_urls,
+        'today_blocked_apps': today_blocked_apps,
+        'top_sites': top_sites,
+        'top_apps': top_apps,
+        'weekly_labels': weekly_labels,
+        'weekly_data': weekly_data,
+        'apps_labels': apps_labels,
+        'apps_data': apps_data,
+        'recent_activities': recent_activities,
+        'active_release': active_release,
+        'pending_update_count': pending_update_count,
+        'is_super': is_super,
+    }
+    return render(request, 'menu/home/dashboard.html', context)
 
 
 def group_management(request):

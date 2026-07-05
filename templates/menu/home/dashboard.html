@@ -1,0 +1,335 @@
+{% extends 'base/base.html' %}
+{% block content %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+    .bg-dark-transparent {
+        background-color: rgba(0, 0, 0, 0.45) !important;
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+    }
+    .border-bottom-light-3 { border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important; }
+
+    /* KPI card */
+    .kpi-card {
+        background: rgba(0,0,0,0.45);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        padding: 18px 20px;
+        transition: 0.2s;
+        height: 100%;
+    }
+    .kpi-card:hover { border-color: rgba(77,171,247,0.3); transform: translateY(-2px); }
+    .kpi-card .icon-wrap {
+        width: 44px; height: 44px; border-radius: 10px;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 1.35rem; margin-bottom: 12px;
+    }
+    .kpi-card .label { color: #adb5bd; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 3px; }
+    .kpi-card .value { color: #fff; font-size: 1.8rem; font-weight: 300; line-height: 1; }
+    .kpi-card .sub { color: #7d8fa8; font-size: 0.75rem; margin-top: 6px; }
+    .kpi-card .value .accent { color: #4caf50; }
+
+    /* Section */
+    .sec-card {
+        background: rgba(0,0,0,0.45);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        color: #d8dee9;
+    }
+    .sec-card .sec-header {
+        padding: 14px 20px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .sec-card .sec-header h6 { color: #fff; margin: 0; font-weight: 500; }
+    .sec-card .sec-header .sub { color: #7d8fa8; font-size: 0.75rem; margin-top: 2px; }
+
+    .list-row {
+        padding: 10px 20px;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 0.85rem;
+    }
+    .list-row:last-child { border-bottom: none; }
+    .list-row:hover { background: rgba(255,255,255,0.03); }
+    .list-row .rank { color: #4dabf7; font-family: monospace; font-weight: 500; width: 22px; flex-shrink: 0; }
+    .list-row .name { color: #fff; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 10px; }
+    .list-row .badge-num {
+        background: rgba(77,171,247,0.15);
+        border: 1px solid rgba(77,171,247,0.35);
+        color: #4dabf7; padding: 2px 10px; border-radius: 12px; font-size: 0.7rem;
+    }
+
+    /* Activity feed */
+    .feed-row {
+        padding: 10px 20px;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        font-size: 0.82rem;
+    }
+    .feed-row:last-child { border-bottom: none; }
+    .feed-row .top { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .feed-row .sub { color: #7d8fa8; font-size: 0.7rem; margin-top: 2px; }
+    .feed-row .badge-app {
+        display: inline-block; padding: 1px 8px; border-radius: 8px;
+        background: rgba(255,255,255,0.06); color: #adb5bd; font-size: 0.68rem;
+    }
+
+    .release-info {
+        padding: 20px;
+        background: linear-gradient(135deg, rgba(76,175,80,0.1), rgba(77,171,247,0.05));
+        border: 1px solid rgba(76,175,80,0.25);
+        border-radius: 10px;
+        color: #d8dee9;
+    }
+    .release-info .ver { color: #4caf50; font-size: 1.5rem; font-weight: 400; }
+</style>
+
+<div class="content-wrapper">
+    <div class="container-fluid">
+
+        <div class="row mt-3 mb-4">
+            <div class="col-12">
+                <h4 class="text-white mb-1"><i class="zmdi zmdi-view-dashboard mr-2" style="color:#4dabf7"></i> Asosiy sahifa</h4>
+                <p class="text-muted small">{{ request.user.username }}, xush kelibsiz — real-time statistika</p>
+            </div>
+        </div>
+
+        <!-- ===== KPI ROW ===== -->
+        <div class="row mb-4">
+            <div class="col-md-6 col-lg-3 mb-3">
+                <div class="kpi-card">
+                    <div class="icon-wrap" style="background:rgba(76,175,80,0.15);color:#4caf50;">
+                        <i class="zmdi zmdi-desktop-mac"></i>
+                    </div>
+                    <div class="label">Jami qurilmalar</div>
+                    <div class="value">{{ total_pcs }}</div>
+                    <div class="sub"><span class="accent" style="color:#4caf50">● {{ online_pcs }} onlayn</span> · <span style="color:#ff5252">● {{ offline_pcs }} oflayn</span></div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3 mb-3">
+                <div class="kpi-card">
+                    <div class="icon-wrap" style="background:rgba(77,171,247,0.15);color:#4dabf7;">
+                        <i class="zmdi zmdi-globe"></i>
+                    </div>
+                    <div class="label">Bugungi tashriflar</div>
+                    <div class="value">{{ today_url_visits }}</div>
+                    <div class="sub">URL kirishlar</div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3 mb-3">
+                <div class="kpi-card">
+                    <div class="icon-wrap" style="background:rgba(255,152,0,0.15);color:#ff9800;">
+                        <i class="zmdi zmdi-block"></i>
+                    </div>
+                    <div class="label">Bloklangan sayt urinishlari</div>
+                    <div class="value">{{ today_blocked_urls }}</div>
+                    <div class="sub">Bugungi kun</div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3 mb-3">
+                <div class="kpi-card">
+                    <div class="icon-wrap" style="background:rgba(233,30,99,0.15);color:#e91e63;">
+                        <i class="zmdi zmdi-close-circle"></i>
+                    </div>
+                    <div class="label">Bloklangan dastur urinishlari</div>
+                    <div class="value">{{ today_blocked_apps }}</div>
+                    <div class="sub">Bugungi kun</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== CHARTS ROW ===== -->
+        <div class="row mb-4">
+            <div class="col-lg-8 mb-3">
+                <div class="sec-card h-100">
+                    <div class="sec-header">
+                        <h6><i class="zmdi zmdi-trending-up mr-2" style="color:#4dabf7"></i> Oxirgi 7 kun — URL tashriflar</h6>
+                        <div class="sub">Har kunlik tashriflar dinamikasi</div>
+                    </div>
+                    <div style="padding:20px;">
+                        <canvas id="chartWeekly" height="90"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mb-3">
+                <div class="sec-card h-100">
+                    <div class="sec-header">
+                        <h6><i class="zmdi zmdi-chart mr-2" style="color:#4caf50"></i> Top dasturlar (bugun)</h6>
+                        <div class="sub">Eng ko'p aktiv vaqt</div>
+                    </div>
+                    <div style="padding:20px;">
+                        <canvas id="chartApps" height="180"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== LISTS ROW ===== -->
+        <div class="row mb-4">
+            <div class="col-lg-6 mb-3">
+                <div class="sec-card h-100">
+                    <div class="sec-header">
+                        <h6><i class="zmdi zmdi-star mr-2" style="color:#ffc107"></i> Top saytlar</h6>
+                        <div class="sub">Bugun eng ko'p kirilganlar</div>
+                    </div>
+                    {% for site in top_sites %}
+                        <div class="list-row">
+                            <span class="rank">{{ forloop.counter }}</span>
+                            <span class="name" title="{{ site.url }}">
+                                {{ site.title|default:site.url|truncatechars:60 }}
+                            </span>
+                            <span class="badge-num">{{ site.visits }} ta</span>
+                        </div>
+                    {% empty %}
+                        <div class="list-row" style="justify-content:center;color:#7d8fa8;">Ma'lumot yo'q</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-lg-6 mb-3">
+                <div class="sec-card h-100">
+                    <div class="sec-header">
+                        <h6><i class="zmdi zmdi-time mr-2" style="color:#4dabf7"></i> Oxirgi faoliyat</h6>
+                        <div class="sub">So'nggi 10 ta URL kirishi</div>
+                    </div>
+                    {% for act in recent_activities %}
+                        <div class="feed-row">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1" style="overflow:hidden;">
+                                    <div class="top" title="{{ act.title|default:act.url }}">
+                                        {{ act.title|default:act.url|truncatechars:70 }}
+                                    </div>
+                                    <div class="sub">
+                                        <i class="zmdi zmdi-desktop-mac"></i> {{ act.computer.hostname|default:"Unknown" }}
+                                        · <span class="badge-app">{{ act.app_name }}</span>
+                                    </div>
+                                </div>
+                                <span class="sub" style="flex-shrink:0;margin-left:10px;">{{ act.created_at|date:"H:i" }}</span>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="feed-row" style="text-align:center;color:#7d8fa8;">Faoliyat yo'q</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== BOTTOM ROW — Release info + Meta ===== -->
+        <div class="row mb-4">
+            {% if is_super and active_release %}
+            <div class="col-lg-6 mb-3">
+                <div class="release-info h-100">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <div class="text-muted small">Faol Nigoh Release</div>
+                            <div class="ver">v{{ active_release.version }}</div>
+                        </div>
+                        <span class="badge-num" style="background:rgba(76,175,80,0.15);border-color:rgba(76,175,80,0.35);color:#4caf50;">
+                            ● Aktiv
+                        </span>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="text-white h5 mb-0">{{ active_release.files.count }}</div>
+                            <div class="text-muted small">Fayllar</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-white h5 mb-0">{{ pending_update_count }}</div>
+                            <div class="text-muted small">Kutayotgan yangilanish</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-white h5 mb-0">{{ whitelist_pcs }}</div>
+                            <div class="text-muted small">Whitelist PC</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            <div class="{% if is_super and active_release %}col-lg-6{% else %}col-12{% endif %} mb-3">
+                <div class="sec-card h-100" style="padding: 20px;">
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <div class="text-white" style="font-size:1.8rem;font-weight:300;">{{ total_groups }}</div>
+                            <div class="text-muted small">Guruhlar (xonalar)</div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="text-white" style="font-size:1.8rem;font-weight:300;">{{ online_pct }}%</div>
+                            <div class="text-muted small">Onlayn foizi</div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <a href="{% url 'device_list' %}" class="btn btn-sm" style="background:rgba(77,171,247,0.15);border:1px solid rgba(77,171,247,0.35);color:#4dabf7;">
+                            <i class="zmdi zmdi-format-list-bulleted"></i> Barcha qurilmalar
+                        </a>
+                        <a href="{% url 'external_connections' %}" class="btn btn-sm ml-2" style="background:rgba(76,175,80,0.15);border:1px solid rgba(76,175,80,0.35);color:#4caf50;">
+                            <i class="zmdi zmdi-globe"></i> Tashqi ulanishlar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+(function() {
+    // WEEKLY LINE CHART
+    var wl = document.getElementById('chartWeekly');
+    if (wl) {
+        new Chart(wl.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: {{ weekly_labels|safe }},
+                datasets: [{
+                    label: 'Tashriflar',
+                    data: {{ weekly_data|safe }},
+                    borderColor: '#4dabf7',
+                    backgroundColor: 'rgba(77,171,247,0.15)',
+                    fill: true, tension: 0.35, borderWidth: 2,
+                    pointBackgroundColor: '#4dabf7', pointRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#adb5bd' } },
+                    x: { grid: { display: false }, ticks: { color: '#adb5bd' } }
+                }
+            }
+        });
+    }
+
+    // APPS DOUGHNUT CHART
+    var ac = document.getElementById('chartApps');
+    if (ac) {
+        var labels = {{ apps_labels|safe }};
+        var data   = {{ apps_data|safe }};
+        if (!labels.length) {
+            ac.parentElement.innerHTML = '<div style="text-align:center;color:#7d8fa8;padding:40px 0;">Ma\'lumot yo\'q</div>';
+        } else {
+            new Chart(ac.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['#4dabf7', '#4caf50', '#ff9800', '#e91e63', '#9c27b0'],
+                        borderColor: 'rgba(0,0,0,0.3)', borderWidth: 2,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#adb5bd', boxWidth: 12, padding: 8, font: { size: 11 } } }
+                    }
+                }
+            });
+        }
+    }
+})();
+</script>
+
+{% endblock %}
