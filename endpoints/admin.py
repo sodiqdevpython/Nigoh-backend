@@ -69,12 +69,13 @@ class GroupAdmin(admin.ModelAdmin):
 @admin.register(Computer)
 class ComputerAdmin(admin.ModelAdmin):
     list_display = (
-        'hostname', 'device_id_short', 'whitelist_badge',
+        'hostname', 'owner', 'device_id_short', 'whitelist_badge',
         'agent_version', 'watchdog_version',
         'group', 'is_online',
         'cpu_display', 'ram_display', 'disk_display', 'network_display',
         'last_seen',
     )
+    list_editable = ('owner',)
 
     def whitelist_badge(self, obj):
         if obj.is_whitelisted:
@@ -82,7 +83,7 @@ class ComputerAdmin(admin.ModelAdmin):
         return format_html('<span style="color:#4caf50;">Ochiq</span>')
     whitelist_badge.short_description = "Ko'rinish"
     list_filter = ('is_online', 'is_whitelisted', 'group', 'agent_version', 'watchdog_version')
-    search_fields = ('hostname', 'bios_uuid', 'device_id')
+    search_fields = ('hostname', 'bios_uuid', 'device_id', 'owner')
     # is_whitelisted — WhitelistedComputer orqali boshqariladi, bu yerda faqat ko'rinadi
     readonly_fields = ('auth_token', 'last_version_report', 'last_seen', 'is_whitelisted')
 

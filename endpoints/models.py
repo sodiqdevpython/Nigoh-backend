@@ -51,6 +51,16 @@ class Computer(BaseModel):
     mac_address = models.CharField(max_length=50, blank=True, null=True)
     hostname = models.CharField(max_length=150, blank=True, null=True)
 
+    # Egasi — qo'lda yoziladi, agent hech qachon yubormaydi.
+    # Faqat staff va superadmin tahrirlay oladi. Har 15 daqiqadagi ma'lumot
+    # yangilanishida bu field tegilmaydi (agent yubormaydi — ORM/agent kodi
+    # bu maydonga tegmasligi kerak).
+    owner = models.CharField(
+        max_length=150, blank=True, default='',
+        verbose_name="Egasi (F.I.Sh.)",
+        help_text="Qurilma egasining ismi — faqat staff yozadi",
+    )
+
     # Qurilma xususiyatlari (Hardware Specs)
     cpu_info = models.CharField(max_length=255, blank=True, null=True)
     ram_gb = models.FloatField(blank=True, null=True)
