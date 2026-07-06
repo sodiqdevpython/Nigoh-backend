@@ -221,10 +221,16 @@ def home(request):
         if not g:
             continue
         origin = _origin_for_computer(a.computer)
+        owner = (a.computer.owner if a.computer else '') or ''
+        hostname = (a.computer.hostname if a.computer else '') or ''
+        # Ko'rinishda `owner` afzal (bo'lsa), aks holda hostname
+        display_name = owner or hostname or 'Unknown'
         globe_arcs.append({
             'id':       str(a.id),
             'domain':   d,
-            'hostname': (a.computer.hostname if a.computer else 'Unknown') or 'Unknown',
+            'hostname': display_name,          # asosiy ko'rsatiladigan nom
+            'owner':    owner,
+            'raw_hostname': hostname,
             'ts':       a.created_at.isoformat(),
             'origin':   origin,
             'geo':      g,
@@ -466,7 +472,7 @@ def device_detail_view(request, pk):
     # Whitelist tekshiruvi — faqat superuser ko'ra oladi
     if computer.is_whitelisted and not request.user.is_superuser:
         return render(request, 'menu/device/whitelist_blocked.html', {
-            'computer_hostname': computer.hostname or 'Nomsiz',
+            'computer_hostname': computer.owner or computer.hostname or 'Nomsiz',
         }, status=403)
 
     if request.GET.get('metrics_only') == '1':
@@ -1365,10 +1371,14 @@ def external_connections_data_json(request):
                 continue
             usage = usage_map.get((a.computer_id, _norm_app(a.app_name)), {})
             origin = _origin_for_computer(a.computer)
+            owner = (a.computer.owner if a.computer else '') or ''
+            raw_host = (a.computer.hostname if a.computer else '') or ''
             arcs.append({
                 'id':          str(a.id),
                 'computer_id': str(a.computer.id) if a.computer else '',
-                'hostname':    (a.computer.hostname if a.computer else None) or 'Unknown',
+                'hostname':    owner or raw_host or 'Unknown',   # birinchi navbatda owner
+                'owner':       owner,
+                'raw_hostname': raw_host,
                 'location':    _location(a.computer),
                 'group_name':  a.computer.group.name if (a.computer and a.computer.group) else None,
                 'origin':      origin,     # ushbu PC uchun chiqish nuqtasi (bino bo'yicha)

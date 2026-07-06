@@ -288,11 +288,11 @@
                                         <div class="d-flex align-items-center">
                                             <span class="pc-status-dot {% if pc.is_online %}dot-online{% else %}dot-offline{% endif %}"></span>
                                             <span class="text-white font-weight-bold" style="font-size:0.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                                                {{ pc.hostname|default:"Nomsiz" }}
+                                                {% if pc.owner %}{{ pc.owner }}{% else %}{{ pc.hostname|default:"Nomsiz" }}{% endif %}
                                             </span>
                                         </div>
                                         <div class="text-muted" style="font-size:0.72rem; margin-top:2px; margin-left:14px;">
-                                            {{ pc.key|truncatechars:20 }}
+                                            {% if pc.owner and pc.hostname %}{{ pc.hostname|truncatechars:20 }}{% else %}{{ pc.key|truncatechars:20 }}{% endif %}
                                         </div>
                                     </div>
                                     <!-- Individual command dropdown -->
