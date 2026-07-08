@@ -15,6 +15,7 @@ from django.core.paginator import Paginator
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.contrib.auth.decorators import login_required
+from functools import wraps
 from tracking.models import (
     AppUsageStatistic, ActivityLog, BlockedAttemptLog, ProcessAlertLog,
     ScreenShareSession, BlockedURL, BlockedProcess,
@@ -38,6 +39,25 @@ def get_secure_token():
 def _computer_key(computer):
     """LIVE_METRICS va WS group uchun kalit (device_id afzal, bios_uuid fallback)."""
     return computer.device_id or computer.bios_uuid
+
+
+def staff_required(view_func):
+    """
+    JSON API endpointlar uchun — faqat `is_staff=True` foydalanuvchi o'tadi.
+    PC ga real buyruq/signal yuboradigan HAR BIR endpoint shu bilan himoyalanadi:
+    login qilmagan kishi 401, login qilgan-lekin-staff-bo'lmagan kishi 403 oladi.
+    `@login_required` dan farqli — HTML login sahifasiga redirect qilmaydi,
+    JSON javob qaytaradi (chunki bu endpointlarni fetch() chaqiradi).
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': 'Tizimga kirish talab qilinadi'}, status=401)
+        if not request.user.is_staff:
+            return JsonResponse({'error': "Bu amal uchun staff huquqi kerak"}, status=403)
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
 
 def login_view(request):
     # 1. Agar foydalanuvchi allaqachon tizimga kirgan bo'lsa, asosiy sahifaga yo'naltiramiz
@@ -394,7 +414,7 @@ def device_list_view(request):
     return render(request, 'menu/device/device_list.html', context)
 
 
-@login_required
+@staff_required
 def create_remote_session_view(request, bios_uuid):
     if request.method == 'POST':
         # URL parametri 'bios_uuid' deb atalgan, lekin device_id ham bo'lishi mumkin
@@ -678,6 +698,7 @@ def group_metrics_view(request, pk):
     return JsonResponse({'pcs': result, 'online_count': online_total, 'total_count': len(result)})
 
 
+@staff_required
 def group_command_view(request, pk):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
@@ -757,6 +778,7 @@ def group_command_view(request, pk):
     return JsonResponse({'status': 'ok', 'sent': sent})
 
 
+@staff_required
 def device_command_view(request, pk):
     """Bitta qurilmaga buyruq yuborish"""
     if request.method != 'POST':
@@ -822,7 +844,7 @@ def device_command_view(request, pk):
 # SCREENSHOT — admin bir marta rasm oladi
 # ============================================================
 
-@login_required
+@staff_required
 def request_screenshot_view(request, pk):
     """
     Admin 'Ekranni rasmga olish' tugmasini bosadi.
@@ -881,7 +903,7 @@ def poll_screenshot_view(request, pk, req_id):
 # LOG REQUEST — admin agent'ning shifrlangan result.log ni oladi
 # ============================================================
 
-@login_required
+@staff_required
 def request_log_view(request, pk):
     """
     Admin "Log so'rash" tugmasini bosadi.
@@ -954,7 +976,7 @@ def poll_log_view(request, pk, req_id):
 # BROADCAST — 1 input → N outputs (screen sharing multiplex)
 # ============================================================
 
-@login_required
+@staff_required
 def broadcast_start_view(request):
     """
     Admin (o'qituvchi) broadcast boshlaydi.

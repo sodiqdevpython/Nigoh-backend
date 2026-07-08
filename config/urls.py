@@ -23,8 +23,8 @@ schema_view = get_schema_view(
       default_version='v1',
       description="Tarmoq va Resurslarni Optimallashtirish Tizimi API",
    ),
-   public=True,
-   permission_classes=(permissions.AllowAny,),
+   public=False,
+   permission_classes=(permissions.IsAdminUser,),
 )
 
 urlpatterns = [
