@@ -277,6 +277,60 @@ class ScreenshotRequest(BaseModel):
 
 
 # ============================================================
+# LOG REQUEST — admin agent'ning result.log faylini so'raydi
+# ============================================================
+
+def _log_upload_path(instance, filename):
+    from datetime import datetime
+    now = datetime.now()
+    return f"agent_logs/{now.year}/{now.month:02d}/{instance.computer_id}/{instance.id}.log"
+
+
+class LogRequest(BaseModel):
+    """
+    Har bir 'Log so'rash' bosishi shu yerga yoziladi.
+    Agent shifrlangan result.log faylini yuklaydi — admin uni yuklab olib
+    nigoh-log-decrypt.ps1 skripti bilan ochadi.
+    """
+    STATUS_CHOICES = (
+        ('PENDING',   'Kutilmoqda'),
+        ('DELIVERED', 'Agent qabul qildi'),
+        ('COMPLETED', 'Log keldi'),
+        ('FAILED',    'Xato'),
+    )
+
+    computer = models.ForeignKey(
+        'endpoints.Computer', on_delete=models.CASCADE,
+        related_name='log_requests'
+    )
+    requested_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='log_requests',
+        help_text="Qaysi admin so'ragan (audit uchun)"
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+
+    log_file = models.FileField(
+        upload_to=_log_upload_path, blank=True, null=True,
+        help_text="Agent yuborgan shifrlangan result.log"
+    )
+    log_size_bytes = models.PositiveIntegerField(default=0, help_text="Fayl hajmi (bayt)")
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['computer', '-created_at'])]
+        verbose_name = "Log so'rovi"
+        verbose_name_plural = "Log so'rovlari"
+
+    def __str__(self):
+        who = self.requested_by.username if self.requested_by else 'anonymous'
+        return f"{self.computer.hostname} — {who} ({self.status})"
+
+
+# ============================================================
 # BROADCAST — 1 input → N outputs ekran ulashish
 # (input screen_share.exe ishga tushiradi, output'lar brauzerdan URL'ga o'tadi)
 # ============================================================

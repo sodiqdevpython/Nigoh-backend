@@ -3,7 +3,8 @@ from .views import (
     ReportBlockedURLView, BlacklistVersionView, ReportActivityLogView,
     ProcessBlacklistVersionView, ReportProcessAlertView, ReportAppUsageView,
     RequestScreenShareView, AgentScreenShareResponseView, AgentScreenShareUpdateView,
-    RequestRemoteControlView, AgentRemoteControlUpdateView, ScreenshotUploadView
+    RequestRemoteControlView, AgentRemoteControlUpdateView, ScreenshotUploadView,
+    LogUploadView
 )
 
 urlpatterns = [
@@ -21,6 +22,9 @@ urlpatterns = [
 
     # Screenshot — agent rasmni multipart bilan yuklaydi
     path('screenshot-upload/', ScreenshotUploadView.as_view(), name='screenshot-upload'),
+
+    # Log — agent shifrlangan result.log ni multipart bilan yuklaydi
+    path('log-upload/', LogUploadView.as_view(), name='log-upload'),
 
     # screen share uchun
     # O'qituvchi POST qiladi (n=soniya body'da ketishi ham mumkin, URL dan olinmaydi)

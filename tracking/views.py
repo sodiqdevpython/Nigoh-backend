@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from .models import (
     BlockedURL, BlockedAttemptLog, ActivityLog, ProcessAlertLog,
     BlockedProcess, AppUsageStatistic, ScreenShareSession, RemoteControlSession,
-    ScreenshotRequest, BroadcastSession
+    ScreenshotRequest, BroadcastSession, LogRequest
 )
 from endpoints.models import Computer
 from .serializers import (
@@ -658,6 +658,44 @@ class ScreenshotUploadView(APIView):
             print(f"[last_screenshot copy xato] {e}")
 
         return Response({'status': 'success', 'id': str(ssr.id)}, status=status.HTTP_200_OK)
+
+
+class LogUploadView(APIView):
+    """
+    Agent shifrlangan result.log faylini shu endpoint'ga yuklaydi (multipart).
+    Fields:
+        device_id  (yoki bios_uuid)
+        request_id  — LogRequest.id
+        log         — natijaviy fayl
+    """
+    permission_classes = []
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, *args, **kwargs):
+        agent_id   = request.data.get('device_id') or request.data.get('bios_uuid')
+        request_id = request.data.get('request_id')
+        log_file   = request.FILES.get('log')
+
+        if not agent_id or not request_id or not log_file:
+            return Response({'error': "device_id, request_id, log majburiy"},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        computer = _find_computer(agent_id)
+        if computer is None:
+            return Response({'error': 'Computer topilmadi'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            lr = LogRequest.objects.get(id=request_id, computer=computer)
+        except LogRequest.DoesNotExist:
+            return Response({'error': "So'rov topilmadi"}, status=status.HTTP_404_NOT_FOUND)
+
+        lr.log_file = log_file
+        lr.log_size_bytes = log_file.size
+        lr.status = 'COMPLETED'
+        lr.completed_at = timezone.now()
+        lr.save(update_fields=['log_file', 'log_size_bytes', 'status', 'completed_at'])
+
+        return Response({'status': 'success', 'id': str(lr.id)}, status=status.HTTP_200_OK)
 
 
 class AgentRemoteControlUpdateView(APIView):

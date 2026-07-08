@@ -18,7 +18,7 @@ from django.contrib.auth.decorators import login_required
 from tracking.models import (
     AppUsageStatistic, ActivityLog, BlockedAttemptLog, ProcessAlertLog,
     ScreenShareSession, BlockedURL, BlockedProcess,
-    ScreenshotRequest, BroadcastSession, AppIcon
+    ScreenshotRequest, BroadcastSession, AppIcon, LogRequest
 )
 from endpoints.consumers import LIVE_METRICS
 import json
@@ -874,6 +874,60 @@ def poll_screenshot_view(request, pk, req_id):
         'status': ssr.status,
         'image_url': ssr.image.url if ssr.image else None,
         'error': ssr.error_message,
+    })
+
+
+# ============================================================
+# LOG REQUEST — admin agent'ning shifrlangan result.log ni oladi
+# ============================================================
+
+@login_required
+def request_log_view(request, pk):
+    """
+    Admin "Log so'rash" tugmasini bosadi.
+    Yangi LogRequest yaratiladi va agent'ga WS orqali xabar yuboriladi.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    computer = get_object_or_404(Computer, id=pk)
+    if computer.is_whitelisted and not request.user.is_superuser:
+        return JsonResponse({'error': 'Bu qurilma bloklangan'}, status=403)
+    if not computer.is_online:
+        return JsonResponse({'error': 'Bu PC oflayn'}, status=400)
+
+    lr = LogRequest.objects.create(
+        computer=computer,
+        requested_by=request.user,
+        status='PENDING',
+    )
+
+    channel_layer = get_channel_layer()
+    ws_key = computer.device_id or computer.bios_uuid
+    async_to_sync(channel_layer.group_send)(
+        f'pc_{ws_key}',
+        {
+            'type': 'execute_command',
+            'data': {
+                'type': 'fetch_log',
+                'action': 'send',
+                'payload': {'request_id': str(lr.id)},
+            },
+        }
+    )
+
+    return JsonResponse({'status': 'pending', 'request_id': str(lr.id)})
+
+
+@login_required
+def poll_log_view(request, pk, req_id):
+    """Frontend har 2 sekundda so'raydi — log kelganmi."""
+    lr = get_object_or_404(LogRequest, id=req_id, computer_id=pk)
+    return JsonResponse({
+        'status':   lr.status,
+        'log_url':  lr.log_file.url if lr.log_file else None,
+        'size_kb':  round(lr.log_size_bytes / 1024, 1) if lr.log_size_bytes else 0,
+        'error':    lr.error_message,
     })
 
 

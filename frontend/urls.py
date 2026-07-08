@@ -27,6 +27,10 @@ urlpatterns = [
     path('device/<str:pk>/screenshot-request/', v.request_screenshot_view, name='request_screenshot'),
     path('device/<str:pk>/screenshot-poll/<uuid:req_id>/', v.poll_screenshot_view, name='poll_screenshot'),
 
+    # Log — admin agent'ning shifrlangan result.log ni oladi
+    path('device/<str:pk>/log-request/', v.request_log_view, name='request_log'),
+    path('device/<str:pk>/log-poll/<uuid:req_id>/', v.poll_log_view, name='poll_log'),
+
     # App icons — dastur logotiplari JSON (DB dagi)
     path('app-icons.json', v.app_icons_json, name='app_icons_json'),
 

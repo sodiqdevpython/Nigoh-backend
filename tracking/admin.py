@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     BlockedURL, BlockedAttemptLog, ActivityLog, BlockedProcess, ProcessAlertLog,
     AppUsageStatistic, ScreenShareSession, RemoteControlSession,
-    ScreenshotRequest, BroadcastSession, AppIcon
+    ScreenshotRequest, BroadcastSession, AppIcon, LogRequest
 )
 from django.utils.html import format_html
 import hashlib
@@ -49,6 +49,37 @@ class ScreenshotRequestAdmin(admin.ModelAdmin):
             )
         return 'Rasm hali yuklanmagan'
     preview_large.short_description = "To'liq rasm"
+
+
+@admin.register(LogRequest)
+class LogRequestAdmin(admin.ModelAdmin):
+    list_display = ('computer', 'requested_by', 'status', 'size_display', 'download_link',
+                    'created_at', 'completed_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('computer__hostname', 'computer__device_id', 'requested_by__username')
+    readonly_fields = ('computer', 'requested_by', 'status', 'log_file', 'log_size_bytes',
+                       'delivered_at', 'completed_at', 'error_message', 'download_link',
+                       'created_at', 'updated_at')
+    fields = ('computer', 'requested_by', 'status', 'download_link', 'log_size_bytes',
+              'delivered_at', 'completed_at', 'error_message', 'created_at', 'updated_at')
+
+    def has_add_permission(self, request):
+        return False  # faqat frontend "Log so'rash" tugmasidan yaratiladi
+
+    def size_display(self, obj):
+        if obj.log_size_bytes:
+            return f"{obj.log_size_bytes / 1024:.1f} KB"
+        return '—'
+    size_display.short_description = "Hajmi"
+
+    def download_link(self, obj):
+        if obj.log_file:
+            return format_html(
+                '<a href="{0}" download style="color:#4ade80;font-weight:bold">⬇ Yuklab olish</a>',
+                obj.log_file.url
+            )
+        return '—'
+    download_link.short_description = "Log fayl"
 
 
 @admin.register(BroadcastSession)

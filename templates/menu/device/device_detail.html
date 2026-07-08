@@ -156,6 +156,11 @@
                                                 style="background: rgba(56, 193, 114, 0.8); color: white; border: 1px solid #38c172; box-shadow: 0 0 10px rgba(56,193,114,0.3);">
                                             <i class="zmdi zmdi-camera text-white mr-1"></i> Ekranni rasmga olish
                                         </button>
+
+                                        <button type="button" id="btnFetchLog" class="btn btn-sm px-3 py-2 ml-2" onclick="fetchAgentLog()"
+                                                style="background: rgba(255, 152, 0, 0.8); color: white; border: 1px solid #ff9800; box-shadow: 0 0 10px rgba(255,152,0,0.3);">
+                                            <i class="zmdi zmdi-download text-white mr-1"></i> Log so'rash
+                                        </button>
                                     {% else %}
                                         <span class="badge px-3 py-2" style="background: rgba(220, 53, 69, 0.2); color: #ff5252; border: 1px solid #ff5252; text-shadow: none;"><i class="zmdi zmdi-circle-o"></i> Oflayn</span>
                                     {% endif %}
@@ -1516,6 +1521,127 @@
         });
     })();
 </script>
+
+<!-- ============================================================
+     LOG REQUEST — admin agent'ning shifrlangan result.log ni oladi
+     ============================================================ -->
+<div class="modal fade" id="logRequestModal" tabindex="-1" role="dialog" data-backdrop="static" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content" style="background:#1a1d29;border:1px solid #ff9800;">
+            <div class="modal-header border-0">
+                <h5 class="modal-title text-white">
+                    <i class="zmdi zmdi-file-text mr-2" style="color:#ff9800"></i>
+                    Agent Log so'rovi
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="logLoading" class="text-center py-4">
+                    <div class="spinner-border" style="color:#ff9800" role="status"></div>
+                    <p class="text-white mt-3 mb-1" id="logLoadingText">Agentga so'rov yuborilmoqda...</p>
+                    <small class="text-muted">Agent shifrlangan result.log ni yuklab yuboradi</small>
+                </div>
+                <div id="logResult" style="display:none;">
+                    <div class="alert alert-success bg-transparent border-success text-center">
+                        <i class="zmdi zmdi-check-circle mr-1" style="font-size:24px;color:#4ade80"></i>
+                        <div class="mt-2 text-white">Log muvaffaqiyatli yuklandi</div>
+                        <div class="small text-muted mt-1">Hajmi: <span id="logSize">—</span> KB</div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <a id="logDownload" href="#" download class="btn btn-warning">
+                            <i class="zmdi zmdi-download mr-1"></i> Faylni yuklab olish
+                        </a>
+                    </div>
+                    <div class="mt-3 p-3" style="background:#0d0f18;border-radius:6px;">
+                        <div class="text-white small mb-2"><b>Ochish uchun:</b></div>
+                        <code class="text-warning" style="font-size:12px">
+                            .\nigoh-log-decrypt.ps1 -Path .\result.log
+                        </code>
+                        <div class="small text-muted mt-2">
+                            Master parol kod ichida: <code>sodiq2005.py</code>
+                        </div>
+                    </div>
+                </div>
+                <div id="logError" class="alert alert-danger" style="display:none;">
+                    <i class="zmdi zmdi-alert-circle mr-2"></i>
+                    <span id="logErrorText"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        let lrPollTimer = null;
+        let lrRequestId = null;
+
+        function lrReset() {
+            if (lrPollTimer) clearInterval(lrPollTimer);
+            document.getElementById('logLoading').style.display = 'block';
+            document.getElementById('logLoadingText').innerText = 'Agentga so\'rov yuborilmoqda...';
+            document.getElementById('logResult').style.display = 'none';
+            document.getElementById('logError').style.display = 'none';
+        }
+
+        function lrShowError(msg) {
+            if (lrPollTimer) clearInterval(lrPollTimer);
+            document.getElementById('logLoading').style.display = 'none';
+            document.getElementById('logErrorText').innerText = msg;
+            document.getElementById('logError').style.display = 'block';
+        }
+
+        window.fetchAgentLog = function () {
+            lrReset();
+            $('#logRequestModal').modal('show');
+
+            fetch(`{% url 'request_log' computer.id %}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) { lrShowError(data.error); return; }
+                lrRequestId = data.request_id;
+                document.getElementById('logLoadingText').innerText = 'Agent log faylini yubormoqda...';
+
+                let attempts = 0;
+                lrPollTimer = setInterval(function () {
+                    attempts++;
+                    if (attempts > 30) {  // 60 sek max
+                        lrShowError("Agentdan javob kelmadi (60 sek kutildi)");
+                        return;
+                    }
+                    fetch(`/device/{{ computer.id }}/log-poll/${lrRequestId}/`)
+                        .then(r => r.json())
+                        .then(pd => {
+                            if (pd.status === 'COMPLETED' && pd.log_url) {
+                                clearInterval(lrPollTimer);
+                                document.getElementById('logLoading').style.display = 'none';
+                                document.getElementById('logSize').innerText = pd.size_kb;
+                                document.getElementById('logDownload').href = pd.log_url;
+                                document.getElementById('logResult').style.display = 'block';
+                            } else if (pd.status === 'FAILED') {
+                                lrShowError(pd.error || 'Agent xato qaytardi');
+                            }
+                        })
+                        .catch(err => console.error(err));
+                }, 2000);
+            })
+            .catch(err => lrShowError(err.message || 'Tarmoq xatosi'));
+        };
+
+        $('#logRequestModal').on('hidden.bs.modal', function () {
+            if (lrPollTimer) clearInterval(lrPollTimer);
+        });
+    })();
+</script>
+
 {% csrf_token %}
 
 <script>
