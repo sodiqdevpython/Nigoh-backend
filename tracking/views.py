@@ -663,15 +663,20 @@ class ScreenshotUploadView(APIView):
 class LogUploadView(APIView):
     """
     Agent shifrlangan result.log faylini shu endpoint'ga yuklaydi (multipart).
+    Backend uni AVTOMATIK deshifr qiladi va admin'ga oddiy .txt sifatida saqlaydi.
+
     Fields:
         device_id  (yoki bios_uuid)
         request_id  — LogRequest.id
-        log         — natijaviy fayl
+        log         — shifrlangan fayl (Base64(IV||cipher) qatorlar)
     """
     permission_classes = []
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, *args, **kwargs):
+        from django.core.files.base import ContentFile
+        from .log_crypto import decrypt_bytes
+
         agent_id   = request.data.get('device_id') or request.data.get('bios_uuid')
         request_id = request.data.get('request_id')
         log_file   = request.FILES.get('log')
@@ -689,8 +694,22 @@ class LogUploadView(APIView):
         except LogRequest.DoesNotExist:
             return Response({'error': "So'rov topilmadi"}, status=status.HTTP_404_NOT_FOUND)
 
-        lr.log_file = log_file
-        lr.log_size_bytes = log_file.size
+        # Shifrlangan bytelarni o'qib, oddiy matn qilamiz
+        try:
+            encrypted_bytes = log_file.read()
+            plain_text = decrypt_bytes(encrypted_bytes)
+            plain_bytes = plain_text.encode('utf-8')
+        except Exception as e:
+            lr.status = 'FAILED'
+            lr.error_message = f"Deshifr xatosi: {e}"
+            lr.completed_at = timezone.now()
+            lr.save(update_fields=['status', 'error_message', 'completed_at'])
+            return Response({'error': f"Deshifr xato: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # .txt kengaytmasi bilan saqlaymiz (brauzerda ochsa bevosita ko'rinadi)
+        fname = f"result-{lr.id}.txt"
+        lr.log_file.save(fname, ContentFile(plain_bytes), save=False)
+        lr.log_size_bytes = len(plain_bytes)
         lr.status = 'COMPLETED'
         lr.completed_at = timezone.now()
         lr.save(update_fields=['log_file', 'log_size_bytes', 'status', 'completed_at'])
