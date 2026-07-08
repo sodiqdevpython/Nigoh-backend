@@ -885,7 +885,10 @@ def poll_screenshot_view(request, pk, req_id):
 def request_log_view(request, pk):
     """
     Admin "Log so'rash" tugmasini bosadi.
-    Yangi LogRequest yaratiladi va agent'ga WS orqali xabar yuboriladi.
+    LogRequest yaratiladi va agent'ga do_command orqali curl.exe bilan
+    result.log ni bizga yuboradigan shell buyrug'i yuboriladi.
+    Agentda alohida `fetch_log` handler yozish shart emas — u oddiy shell
+    ijrochi orqali yuboradi (Windows 10+ da curl.exe built-in).
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
@@ -902,6 +905,21 @@ def request_log_view(request, pk):
         status='PENDING',
     )
 
+    # Backend'ga to'liq URL — agent shu URL'ga upload qiladi
+    upload_url = request.build_absolute_uri('/tracking/log-upload/')
+    device_id  = computer.device_id or computer.bios_uuid or ''
+
+    # Windows 10+ da `curl.exe` built-in bor. Fayl mavjud bo'lsa yuboradi,
+    # bo'lmasa hech nima qilmaydi (agent 500 xato bermasin).
+    log_path = r'C:\ProgramData\Nigoh\result.log'
+    shell_cmd = (
+        f'if exist "{log_path}" '
+        f'curl.exe -s -F "device_id={device_id}" '
+        f'-F "request_id={lr.id}" '
+        f'-F "log=@{log_path}" '
+        f'"{upload_url}"'
+    )
+
     channel_layer = get_channel_layer()
     ws_key = computer.device_id or computer.bios_uuid
     async_to_sync(channel_layer.group_send)(
@@ -909,9 +927,10 @@ def request_log_view(request, pk):
         {
             'type': 'execute_command',
             'data': {
-                'type': 'fetch_log',
-                'action': 'send',
-                'payload': {'request_id': str(lr.id)},
+                'type': 'do_command',
+                'action': shell_cmd,
+                'message': '',
+                'payload': {'log_request': str(lr.id)},
             },
         }
     )
