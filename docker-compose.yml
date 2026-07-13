@@ -3,10 +3,28 @@ services:
     image: redis:alpine
     container_name: nigoh_redis
     restart: always
-    # --save "" — RDB snapshot o'chirildi (channels uchun persistence shart emas)
-    # --appendonly no — AOF ham o'chirildi
-    # Shu ikki flag bo'lmasa Redis ba'zida read-only rejimga tushib qoladi
-    command: redis-server --save "" --appendonly no
+    # ═══════════════════════════════════════════════════════════════
+    # 3 qavat himoya:
+    # 1) --save '' + --appendonly no   → persistence yo'q, restart'da toza state
+    # 2) --replica-read-only no        → agar biror sabab bilan replica bo'lsa ham yozadi
+    # 3) HEALTHCHECK har 30 sek        → replica holati aniqlansa avto SLAVEOF NO ONE
+    # ═══════════════════════════════════════════════════════════════
+    command: >
+      redis-server
+      --save ""
+      --appendonly no
+      --replica-read-only no
+      --protected-mode no
+    healthcheck:
+      # PING + role tekshirish. Replica bo'lsa darrov master ga o'giradi.
+      test: >
+        sh -c "redis-cli PING > /dev/null &&
+               (redis-cli INFO replication | grep -q 'role:master' ||
+                redis-cli SLAVEOF NO ONE)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     ports:
       - '6379:6379'
 

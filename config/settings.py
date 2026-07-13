@@ -80,7 +80,9 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [env('REDIS_URL', default='redis://localhost:6379/0')],
+            # Docker Compose service nomi 'redis' — localhost EMAS
+            # (localhost = container'ning o'zi = xato)
+            "hosts": [env('REDIS_URL', default='redis://redis:6379/0')],
         },
     },
 }
