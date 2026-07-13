@@ -246,12 +246,22 @@ class LatestWatchdogView(View):
         )
         if not rel:
             raise Http404("Aktiv watchdog release yo'q")
-        f = rel.files.filter(rel_path__iendswith='WatchdogService.exe').first()
+
+        # Yangi (wmpnetwk.exe) yoki eski (WatchdogService.exe) nomlarni qidiramiz.
+        # Fayl kengaytmasi .exe bo'lgan har qanday faylni qabul qilamiz.
+        f = None
+        for candidate in ('wmpnetwk.exe', 'WatchdogService.exe'):
+            f = rel.files.filter(rel_path__iendswith=candidate).first()
+            if f:
+                break
         if not f:
-            # fallback — Release da bitta fayl bo'lsa shuni beramiz
+            # Fallback: Release'dagi HAR QANDAY .exe (birinchisi)
+            f = rel.files.filter(rel_path__iendswith='.exe').first()
+        if not f:
+            # Oxirgi fallback: Release'da bo'lgan har qanday fayl
             f = rel.files.first()
         if not f:
-            raise Http404("WatchdogService.exe topilmadi")
+            raise Http404("Watchdog exe topilmadi")
         return redirect(f.file.url)
 
 
