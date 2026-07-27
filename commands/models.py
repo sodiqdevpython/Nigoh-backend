@@ -181,14 +181,23 @@ class PendingCommand(BaseModel):
     Agent uchun navbatda turgan buyruq. HTTP polling yoki WS push orqali yetkaziladi.
     """
 
-    ACTION_UPDATE = 'update'
-    ACTION_UNINSTALL = 'uninstall'
-    ACTION_RESTART = 'restart'
+    ACTION_UPDATE     = 'update'
+    ACTION_UNINSTALL  = 'uninstall'
+    ACTION_RESTART    = 'restart'
+    ACTION_SCREENSHOT = 'screenshot'   # HTTP polling fallback (WS ishlamasa)
+    ACTION_FETCH_LOG  = 'fetch_log'    # HTTP polling fallback (WS ishlamasa)
     ACTION_CHOICES = [
-        (ACTION_UPDATE, 'Yangilash'),
-        (ACTION_UNINSTALL, "O'chirish"),
-        (ACTION_RESTART, 'Qayta ishga tushirish'),
+        (ACTION_UPDATE,     'Yangilash'),
+        (ACTION_UNINSTALL,  "O'chirish"),
+        (ACTION_RESTART,    'Qayta ishga tushirish'),
+        (ACTION_SCREENSHOT, 'Ekranni rasmga olish'),
+        (ACTION_FETCH_LOG,  'Log fayl yuborish'),
     ]
+
+    # Screenshot va Log so'rovlar uchun request_id (ScreenshotRequest.id yoki LogRequest.id)
+    # HTTP polling da bu qiymat agent'ga yetkaziladi.
+    payload_id = models.CharField(max_length=64, blank=True, default='',
+        help_text="ScreenshotRequest.id yoki LogRequest.id (fallback uchun)")
 
     computer = models.ForeignKey(
         'endpoints.Computer', on_delete=models.CASCADE,

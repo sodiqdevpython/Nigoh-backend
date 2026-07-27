@@ -43,6 +43,19 @@ def _serialize_command(cmd, request):
         return {'action': 'uninstall', 'confirm': True, 'command_id': str(cmd.id)}
     if cmd.action == PendingCommand.ACTION_RESTART:
         return {'action': 'restart', 'command_id': str(cmd.id)}
+    if cmd.action == PendingCommand.ACTION_SCREENSHOT:
+        # Agent bu buyruqni HTTP polling orqali oladi va rasm yuklaydi
+        return {
+            'action':     'screenshot',
+            'request_id': cmd.payload_id,
+            'command_id': str(cmd.id),
+        }
+    if cmd.action == PendingCommand.ACTION_FETCH_LOG:
+        return {
+            'action':     'fetch_log',
+            'request_id': cmd.payload_id,
+            'command_id': str(cmd.id),
+        }
     return {'action': 'none'}
 
 

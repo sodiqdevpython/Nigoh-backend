@@ -22,6 +22,7 @@ from tracking.models import (
     ScreenshotRequest, BroadcastSession, AppIcon, LogRequest
 )
 from endpoints.consumers import LIVE_METRICS
+from commands.models import PendingCommand
 import json
 import re
 import hashlib
@@ -868,19 +869,35 @@ def request_screenshot_view(request, pk):
         status='PENDING',
     )
 
+    # 1) Ikkita yo'l bilan agent'ga yetkazamiz — WS (tez) va HTTP polling (fallback).
+    #    Agar WS ishlamayotgan bo'lsa, HTTP polling 30 sek ichida qabul qiladi.
     channel_layer = get_channel_layer()
     ws_key = computer.device_id or computer.bios_uuid
-    async_to_sync(channel_layer.group_send)(
-        f'pc_{ws_key}',
-        {
-            'type': 'execute_command',
-            'data': {
-                'type': 'take_screenshot',
-                'action': 'capture',
-                'payload': {'request_id': str(ssr.id)},
-            },
-        }
-    )
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f'pc_{ws_key}',
+            {
+                'type': 'execute_command',
+                'data': {
+                    'type': 'take_screenshot',
+                    'action': 'capture',
+                    'payload': {'request_id': str(ssr.id)},
+                },
+            }
+        )
+    except Exception as e:
+        print(f"[screenshot WS push xato] {e}")
+
+    # 2) HTTP polling uchun PendingCommand — agar WS zombie bo'lsa, agent shu orqali oladi
+    try:
+        PendingCommand.objects.create(
+            computer=computer,
+            action=PendingCommand.ACTION_SCREENSHOT,
+            payload_id=str(ssr.id),
+            force=True,
+        )
+    except Exception as e:
+        print(f"[screenshot PendingCommand xato] {e}")
 
     return JsonResponse({
         'status': 'pending',
@@ -944,18 +961,32 @@ def request_log_view(request, pk):
 
     channel_layer = get_channel_layer()
     ws_key = computer.device_id or computer.bios_uuid
-    async_to_sync(channel_layer.group_send)(
-        f'pc_{ws_key}',
-        {
-            'type': 'execute_command',
-            'data': {
-                'type': 'do_command',
-                'action': shell_cmd,
-                'message': '',
-                'payload': {'log_request': str(lr.id)},
-            },
-        }
-    )
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f'pc_{ws_key}',
+            {
+                'type': 'execute_command',
+                'data': {
+                    'type': 'do_command',
+                    'action': shell_cmd,
+                    'message': '',
+                    'payload': {'log_request': str(lr.id)},
+                },
+            }
+        )
+    except Exception as e:
+        print(f"[log WS push xato] {e}")
+
+    # HTTP polling fallback — WS ishlamasa agent 30 sek ichida oladi
+    try:
+        PendingCommand.objects.create(
+            computer=computer,
+            action=PendingCommand.ACTION_FETCH_LOG,
+            payload_id=str(lr.id),
+            force=True,
+        )
+    except Exception as e:
+        print(f"[log PendingCommand xato] {e}")
 
     return JsonResponse({'status': 'pending', 'request_id': str(lr.id)})
 
