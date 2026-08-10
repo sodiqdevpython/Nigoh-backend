@@ -32,6 +32,18 @@ services:
     image: postgres:15-alpine
     container_name: nigoh_db
     restart: always
+    # ═══════════════════════════════════════════════════════════════
+    # Postgres tuning — connection va performance:
+    #  max_connections=300  — 30+ PC uchun yetadi (default 100 kam edi)
+    #  shared_buffers=256MB — cache (RAM ning ~25%)
+    #  work_mem=8MB         — har query uchun temporary xotira
+    # DB fayllari SAQLANADI (postgres_data volume) — hech qanday yo'qotish yo'q.
+    # ═══════════════════════════════════════════════════════════════
+    command: >
+      postgres
+      -c max_connections=300
+      -c shared_buffers=256MB
+      -c work_mem=8MB
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
