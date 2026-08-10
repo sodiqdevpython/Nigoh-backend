@@ -81,6 +81,22 @@ class ComputerConsumer(AsyncWebsocketConsumer):
             return
         msg_type = data.get('type')
 
+        # ── PING/PONG — application-level keepalive.
+        # Agent har 30 sek ping yuboradi. Bu:
+        #   1) last_seen ni yangilaydi → online holati aniq bo'ladi
+        #   2) TCP zombie connection'ni aniqlashga yordam beradi
+        #      (pong javob kelmasa, agent socket'ni yopib qayta ulanadi)
+        if msg_type == 'ping':
+            await self.touch_last_seen()
+            try:
+                await self.send(text_data=json.dumps({
+                    'type': 'pong',
+                    'server_time': data.get('client_time'),  # RTT hisoblash uchun
+                }))
+            except Exception:
+                pass
+            return
+
         if msg_type == 'metrics':
             payload = data.get('payload', {})
             LIVE_METRICS[self.key] = {

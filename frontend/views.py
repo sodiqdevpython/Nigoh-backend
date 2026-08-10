@@ -42,6 +42,30 @@ def _computer_key(computer):
     return computer.device_id or computer.bios_uuid
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# ONLINE HEURISTIC — is_online DB maydonini last_seen ga qarab tuzatib turadi.
+# WS zombie connection'lar tufayli disconnect() chaqirilmasligi mumkin —
+# shuning uchun agar last_seen 90 sekundan uzoq bo'lsa (ping/pong yo'q),
+# is_online=False qilamiz. Ping 30 sek'da bir keladi, 90 sek = 3 pong yo'q.
+# ─────────────────────────────────────────────────────────────────────────
+_last_stale_check = {'ts': None}  # dict — closure ichida yozib bo'ladi
+
+def _mark_stale_offline():
+    """Har 30 sekundda bir marta stale PC'larni offline qiladi (throttled)."""
+    now = timezone.now()
+    prev = _last_stale_check['ts']
+    if prev is not None and (now - prev).total_seconds() < 30:
+        return  # 30 sek ichida bir marta bajarilgan
+    _last_stale_check['ts'] = now
+    try:
+        threshold = now - timedelta(seconds=90)
+        n = Computer.objects.filter(is_online=True, last_seen__lt=threshold).update(is_online=False)
+        if n > 0:
+            print(f"[online-check] {n} ta stale PC offline qilindi (ping/pong yo'q >90 sek)")
+    except Exception as e:
+        print(f"[online-check xato] {e}")
+
+
 def staff_required(view_func):
     """
     JSON API endpointlar uchun — faqat `is_staff=True` foydalanuvchi o'tadi.
@@ -106,6 +130,7 @@ def logout_view(request):
 
 def home(request):
     """Bosh sahifa — kengaytirilgan dashboard: KPI, xarita, chartlar, statistika."""
+    _mark_stale_offline()  # stale is_online'ni tuzatib olamiz
     from django.db.models import Sum, Count
 
     now = timezone.now()
@@ -488,6 +513,7 @@ def check_session_status_view(request, session_id):
 
 
 def device_detail_view(request, pk):
+    _mark_stale_offline()  # stale is_online'ni tuzatib olamiz
     computer = get_object_or_404(Computer, id=pk)
 
     # Whitelist tekshiruvi — faqat superuser ko'ra oladi
