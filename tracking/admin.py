@@ -4,6 +4,7 @@ from .models import (
     AppUsageStatistic, ScreenShareSession, RemoteControlSession,
     ScreenshotRequest, BroadcastSession, AppIcon, LogRequest
 )
+from utils.admin_bulk import BulkDeleteAdminMixin
 from django.utils.html import format_html
 import hashlib
 from datetime import datetime
@@ -18,7 +19,8 @@ from django.shortcuts import render
 # SCREENSHOT AUDIT — kim, qachon, qaysi PC'dan
 # ============================================================
 @admin.register(ScreenshotRequest)
-class ScreenshotRequestAdmin(admin.ModelAdmin):
+class ScreenshotRequestAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
+    list_per_page = 50
     list_display = ('computer', 'requested_by', 'status', 'preview', 'created_at', 'completed_at')
     list_filter = ('status', 'created_at')
     search_fields = ('computer__hostname', 'computer__device_id', 'requested_by__username')
@@ -52,7 +54,8 @@ class ScreenshotRequestAdmin(admin.ModelAdmin):
 
 
 @admin.register(LogRequest)
-class LogRequestAdmin(admin.ModelAdmin):
+class LogRequestAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
+    list_per_page = 50
     list_display = ('computer', 'requested_by', 'status', 'size_display', 'download_link',
                     'created_at', 'completed_at')
     list_filter = ('status', 'created_at')
@@ -104,7 +107,8 @@ class BlockedURLAdmin(admin.ModelAdmin):
 
 
 @admin.register(BlockedAttemptLog)
-class BlockedAttemptLogAdmin(admin.ModelAdmin):
+class BlockedAttemptLogAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
+    list_per_page = 50
     # Ro'yxatda nimalar ko'rinishi (PC nomi, URL va vaqti)
     list_display = ('computer', 'url', 'created_at')
     
@@ -119,7 +123,8 @@ class BlockedAttemptLogAdmin(admin.ModelAdmin):
 
 
 @admin.register(ActivityLog)
-class ActivityLogAdmin(admin.ModelAdmin):
+class ActivityLogAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
+    list_per_page = 50
     list_display = ('computer', 'app_name', 'title', 'duration_seconds', 'created_at')
     
     # Qidiruv
@@ -137,14 +142,16 @@ class BlockedProcessAdmin(admin.ModelAdmin):
     readonly_fields = ('blocked_count', 'id', 'created_at', 'updated_at')
 
 @admin.register(ProcessAlertLog)
-class ProcessAlertLogAdmin(admin.ModelAdmin):
+class ProcessAlertLogAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
+    list_per_page = 50
     list_display = ('computer', 'process_rule', 'app_name', 'attempts_count', 'created_at')
     # list_filter = ('app_name', 'process_rule', 'computer', 'created_at')
     search_fields = ('computer__hostname', 'computer__bios_uuid', 'app_name', 'full_path', 'process_rule__name')
     readonly_fields = ('computer', 'process_rule', 'app_name', 'full_path', 'attempts_count', 'id', 'created_at', 'updated_at')
 
 @admin.register(AppUsageStatistic)
-class AppUsageStatisticAdmin(admin.ModelAdmin):
+class AppUsageStatisticAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
+    list_per_page = 50
     list_display = (
         'computer', 'app_name', 'total_open_seconds', 
         'active_seconds', 'mouse_active_seconds', 'keyboard_active_seconds', 'created_at'

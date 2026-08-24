@@ -2,6 +2,7 @@ from django.contrib import admin, messages
 from django.utils.html import format_html
 
 from endpoints.models import Computer
+from utils.admin_bulk import BulkDeleteAdminMixin
 from .models import PendingCommand, Release, UpdateFile, UpdateLog
 from .services import trigger_uninstall, trigger_update
 
@@ -144,8 +145,9 @@ class PendingCommandAdmin(admin.ModelAdmin):
 
 
 @admin.register(UpdateLog)
-class UpdateLogAdmin(admin.ModelAdmin):
+class UpdateLogAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
     list_display = ['computer', 'target', 'from_version', 'to_version', 'success', 'created_at']
     list_filter = ['target', 'success']
     search_fields = ['computer__hostname', 'computer__device_id', 'to_version']
     readonly_fields = ['created_at', 'updated_at']
+    list_per_page = 50  # 283K entry'da default 100 sekin

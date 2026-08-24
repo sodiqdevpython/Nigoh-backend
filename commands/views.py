@@ -169,6 +169,19 @@ class AgentReportView(APIView):
         success = bool(request.data.get('success', False))
         error   = request.data.get('error_message', '') or ''
 
+        # ═══════════════════════════════════════════════════════════════
+        # IDEMPOTENCY GUARD — agar allaqachon acknowledged bo'lgan bo'lsa,
+        # takror UpdateLog yaratmaymiz. Agent ba'zan bitta command uchun
+        # report'ni bir necha marta yuboradi (retry, WS+HTTP dual channel)
+        # va bu 283K+ dublikat UpdateLog'ga sabab bo'lgan.
+        # ═══════════════════════════════════════════════════════════════
+        if cmd.acknowledged_at is not None:
+            return Response({
+                'ok': True,
+                'status': 'already_acknowledged',
+                'ignored_duplicate': True,
+            })
+
         if success:
             # Muvaffaqiyatli — yakunlaymiz
             cmd.acknowledged_at = timezone.now()
