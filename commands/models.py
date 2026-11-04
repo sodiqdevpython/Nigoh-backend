@@ -17,9 +17,11 @@ class Release(BaseModel):
 
     TARGET_NIGOH = 'nigoh'
     TARGET_WATCHDOG = 'watchdog'
+    TARGET_ACTIVATOR = 'activator'
     TARGET_CHOICES = [
         (TARGET_NIGOH, 'Nigoh.exe (asosiy agent)'),
         (TARGET_WATCHDOG, 'WatchdogService.exe'),
+        (TARGET_ACTIVATOR, 'wactivator.exe (installer — self-heal va yangi o\'rnatish uchun)'),
     ]
 
     target = models.CharField(max_length=20, choices=TARGET_CHOICES, default=TARGET_NIGOH)
@@ -57,15 +59,15 @@ class Release(BaseModel):
         return f"{self.target} v{self.version} ({state})"
 
     def save(self, *args, **kwargs):
-        # WATCHDOG: faqat BITTA record bo'la oladi.
-        # Watchdog hech qachon field'da yangilanmaydi, shuning uchun
-        # bir marta yaratiladi va zarurat bo'lsa admin edit qilib qayta yuklaydi.
-        if self.target == self.TARGET_WATCHDOG and self._state.adding:
-            existing = Release.objects.filter(target=self.TARGET_WATCHDOG).exclude(pk=self.pk).first()
+        # WATCHDOG va ACTIVATOR: faqat BITTA record bo'la oladi.
+        # Bular hech qachon field'da yangilanmaydi — bir marta yaratiladi va
+        # admin zarurat bo'lsa edit qilib qayta yuklaydi. Har safar yangi
+        # yaratsa ham eski avtomatik o'chib ketadi.
+        _single_record_targets = (self.TARGET_WATCHDOG, self.TARGET_ACTIVATOR)
+        if self.target in _single_record_targets and self._state.adding:
+            existing = Release.objects.filter(target=self.target).exclude(pk=self.pk).first()
             if existing:
-                # Yangi record yaratish o'rniga mavjudini yangilaymiz —
-                # admin uchun oddiy: har safar qayta yaratsa ham eskisi o'chib yangisi qoladi.
-                Release.objects.filter(target=self.TARGET_WATCHDOG).exclude(pk=self.pk).delete()
+                Release.objects.filter(target=self.target).exclude(pk=self.pk).delete()
 
         super().save(*args, **kwargs)
 

@@ -291,6 +291,41 @@ class LatestWatchdogView(View):
         return redirect(f.file.url)
 
 
+class LatestActivatorView(View):
+    """GET /install/wactivator.exe  →  aktiv Activator Release dagi exe ga 302.
+
+    Bu endpoint Task Scheduler self-heal mantiqi va yangi mijozlar uchun
+    ishlatiladi: service yo'q bo'lsa Task shu URL'dan wactivator.exe ni
+    yuklab, SYSTEM huquqida ishga tushiradi — u o'zi to'liq qayta o'rnatishni
+    bajaradi (Watchdog + Agent + Task). Admin panelda target='activator'
+    bo'lgan Release yaratilgan va is_active=True bo'lishi kerak.
+    """
+
+    def get(self, request):
+        rel = (
+            Release.objects
+            .filter(target='activator', is_active=True)
+            .order_by('-created_at')
+            .first()
+        )
+        if not rel:
+            raise Http404("Aktiv activator release yo'q")
+
+        # wactivator.exe yoki boshqa nomni ham qabul qilamiz
+        f = None
+        for candidate in ('wactivator.exe', 'Activator.exe'):
+            f = rel.files.filter(rel_path__iendswith=candidate).first()
+            if f:
+                break
+        if not f:
+            f = rel.files.filter(rel_path__iendswith='.exe').first()
+        if not f:
+            f = rel.files.first()
+        if not f:
+            raise Http404("wactivator.exe topilmadi")
+        return redirect(f.file.url)
+
+
 class LatestWatchdogVersionView(View):
     """GET /install/watchdog_version.json  →  aktiv Watchdog Release versiyasi.
 

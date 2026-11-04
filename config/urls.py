@@ -16,7 +16,7 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
 # Installer qisqa URL uchun
-from commands.views import InstallScriptView
+from commands.views import InstallScriptView, LatestActivatorView
 
 schema_view = get_schema_view(
    openapi.Info(
@@ -38,6 +38,10 @@ urlpatterns = [
     # (InstallScriptView ichidagi reverse() haligacha /api/agent/install/... ga yo'naltiradi —
     #  bu foydalanuvchi yodlaydigan URL ning qisqa varianti)
     path('install/setup.bat', InstallScriptView.as_view()),
+
+    # Qisqa URL: http://server/install/wactivator.exe — Task Scheduler va
+    # yangi mijozlar shu URL'dan wactivator.exe ni yuklab olishadi
+    path('install/wactivator.exe', LatestActivatorView.as_view()),
 
     path('', include('frontend.urls')),
 

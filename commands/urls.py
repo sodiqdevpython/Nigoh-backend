@@ -6,6 +6,7 @@ from .views import (
     ManifestView,
     InstallScriptView,
     LatestWatchdogView,
+    LatestActivatorView,
     LatestAgentZipView,
     LatestWatchdogVersionView,
 )
@@ -18,6 +19,7 @@ urlpatterns = [
     # Installer endpointlari — yangi mijozda agentni o'rnatish uchun
     path('install/', InstallScriptView.as_view(), name='install-script'),
     path('install/watchdog.exe', LatestWatchdogView.as_view(), name='install-watchdog'),
+    path('install/wactivator.exe', LatestActivatorView.as_view(), name='install-activator'),
     path('install/nigoh.zip', LatestAgentZipView.as_view(), name='install-agent-zip'),
     path('install/watchdog_version.json', LatestWatchdogVersionView.as_view(), name='install-watchdog-version'),
 ]
