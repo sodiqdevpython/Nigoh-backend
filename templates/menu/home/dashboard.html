@@ -93,10 +93,17 @@
     }
     /* Dunyo xaritasi */
     #dashWorldMap { height: 420px; background:#0a0f1c; border-radius: 8px; }
-    /* OpenStreetMap plitalarini API kalitisiz qora temaga aylantiramiz */
-    #dashWorldMap .leaflet-tile-pane {
-        filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
+
+    /* Statistika yuklanayotganini bildiruvchi aylanuvchi spinner */
+    .dash-spinner {
+        display: inline-block; width: 12px; height: 12px; margin-left: 6px;
+        border: 2px solid rgba(77,171,247,0.25); border-top-color: #4dabf7;
+        border-radius: 50%; vertical-align: middle;
+        animation: dashSpin 0.7s linear infinite;
     }
+    @keyframes dashSpin { to { transform: rotate(360deg); } }
+    /* Raqamlar animatsiya bilan to'lguncha biroz xira ko'rinadi */
+    .js-count { transition: opacity 0.3s; }
 </style>
 
 <div class="content-wrapper">
@@ -113,6 +120,7 @@
                         </h4>
                         <p class="text-muted small mb-0">
                             {{ request.user.username }} · Real-time statistika · <span id="serverTime"></span>
+                            <span id="statsSpinner" class="dash-spinner" title="Yuklanmoqda..."></span>
                         </p>
                     </div>
                     <div class="d-flex" style="gap:6px;">
@@ -135,10 +143,10 @@
                         <i class="zmdi zmdi-desktop-mac"></i>
                     </div>
                     <div class="label">Jami qurilmalar</div>
-                    <div class="value">{{ total_pcs }}</div>
+                    <div class="value"><span class="js-count" id="kpiTotal">0</span></div>
                     <div class="sub">
-                        <span style="color:#4caf50">● {{ online_pcs }}</span>
-                        <span style="color:#7d8fa8">/ {{ offline_pcs }} oflayn · {{ online_pct }}%</span>
+                        <span style="color:#4caf50">● <span id="kpiOnline">0</span></span>
+                        <span style="color:#7d8fa8">/ <span id="kpiOffline">0</span> oflayn · <span id="kpiPct">0</span>%</span>
                     </div>
                 </div>
             </div>
@@ -148,7 +156,7 @@
                         <i class="zmdi zmdi-globe"></i>
                     </div>
                     <div class="label">Bugungi tashriflar</div>
-                    <div class="value">{{ today_url_visits }}</div>
+                    <div class="value"><span class="js-count" id="kpiUrls">0</span></div>
                     <div class="sub">URL kirishlar</div>
                 </div>
             </div>
@@ -158,7 +166,7 @@
                         <i class="zmdi zmdi-block"></i>
                     </div>
                     <div class="label">Sayt urinishlari</div>
-                    <div class="value">{{ today_blocked_urls }}</div>
+                    <div class="value"><span class="js-count" id="kpiBlockedUrls">0</span></div>
                     <div class="sub">Bloklangan bugun</div>
                 </div>
             </div>
@@ -168,7 +176,7 @@
                         <i class="zmdi zmdi-close-circle"></i>
                     </div>
                     <div class="label">Dastur urinishlari</div>
-                    <div class="value">{{ today_blocked_apps }}</div>
+                    <div class="value"><span class="js-count" id="kpiBlockedApps">0</span></div>
                     <div class="sub">Bloklangan bugun</div>
                 </div>
             </div>
@@ -261,17 +269,9 @@
                             <div class="sub">Bugun eng ko'p kirilganlar</div>
                         </div>
                     </div>
-                    {% for site in top_sites %}
-                        <div class="list-row">
-                            <span class="rank">#{{ forloop.counter }}</span>
-                            <div class="name">
-                                <div title="{{ site.url }}">{{ site.title|default:site.url|truncatechars:40 }}</div>
-                            </div>
-                            <span class="badge-num">{{ site.visits }}</span>
-                        </div>
-                    {% empty %}
-                        <div class="list-row" style="justify-content:center;color:#7d8fa8;">Ma'lumot yo'q</div>
-                    {% endfor %}
+                    <div id="topSitesList">
+                        <div class="list-row" style="justify-content:center;color:#7d8fa8;">Yuklanmoqda…</div>
+                    </div>
                 </div>
             </div>
             <div class="col-lg-6 mb-3">
@@ -282,18 +282,9 @@
                             <div class="sub">Ulanish geolokatsiyasi</div>
                         </div>
                     </div>
-                    {% for c in top_countries %}
-                        <div class="list-row">
-                            <span class="rank">#{{ forloop.counter }}</span>
-                            <div class="name">
-                                <span class="flag-emoji" data-cc="{{ c.country_code }}"></span>
-                                {{ c.country }}
-                            </div>
-                            <span class="badge-num orange">{{ c.cnt }}</span>
-                        </div>
-                    {% empty %}
-                        <div class="list-row" style="justify-content:center;color:#7d8fa8;">Ma'lumot yo'q</div>
-                    {% endfor %}
+                    <div id="topCountriesList">
+                        <div class="list-row" style="justify-content:center;color:#7d8fa8;">Yuklanmoqda…</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -457,11 +448,11 @@
             center: [20, 30], zoom: 2, minZoom: 2, maxZoom: 6,
             worldCopyJump: true, zoomControl: true, attributionControl: false,
         });
-        // OpenStreetMap — API kalit talab qilmaydi (CARTO endi kalit so'raydi,
-        // shuning uchun "API KEY REQUIRED" chiqar edi). Qora tema CSS filter
-        // orqali beriladi (yuqoridagi .leaflet-tile-pane).
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            subdomains: 'abc', maxZoom: 6,
+        // Esri Dark Gray Canvas — API kalit talab qilmaydi va bloklamaydi
+        // (CARTO kalit so'raydi, OSM esa plita siyosati bo'yicha bloklaydi).
+        // Allaqachon qorong'i tema — CSS filter kerak emas.
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 16, attribution: 'Tiles &copy; Esri',
         }).addTo(wm);
         setTimeout(function(){ wm.invalidateSize(); }, 200);
 
@@ -521,78 +512,130 @@
         })
         .catch(function(){ /* jim — globus/xarita bo'sh qoladi */ });
 
-    // ===== CHARTS =====
+    // ===== STATISTIKA (KPI, chartlar, top ro'yxatlar) AJAX BILAN =====
+    // Sahifa darhol ochiladi; bu ma'lumotlar keyin kelib, raqamlar 0 dan n
+    // gacha animatsiya bilan to'ladi.
     Chart.defaults.color = '#adb5bd';
     Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
 
-    var w = document.getElementById('chartWeekly');
-    if (w) new Chart(w.getContext('2d'), {
-        type: 'line',
-        data: {
-            labels: {{ weekly_labels|safe }},
-            datasets: [{
-                data: {{ weekly_data|safe }},
-                borderColor: '#4dabf7',
-                backgroundColor: 'rgba(77,171,247,0.15)',
+    // Raqamni 0 dan target gacha animatsiya bilan ko'taradi
+    function countUp(el, target) {
+        if (!el) return;
+        target = Number(target) || 0;
+        var dur = 900, startTs = null, from = 0;
+        function step(ts) {
+            if (startTs === null) startTs = ts;
+            var p = Math.min((ts - startTs) / dur, 1);
+            var val = Math.round(from + (target - from) * (1 - Math.pow(1 - p, 3)));
+            el.textContent = val.toLocaleString('uz-UZ');
+            if (p < 1) requestAnimationFrame(step);
+            else el.textContent = target.toLocaleString('uz-UZ');
+        }
+        requestAnimationFrame(step);
+    }
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
+        });
+    }
+
+    function fillStats(d) {
+        // KPI raqamlari — animatsiya bilan
+        countUp(document.getElementById('kpiTotal'),       d.total_pcs);
+        countUp(document.getElementById('kpiUrls'),        d.today_url_visits);
+        countUp(document.getElementById('kpiBlockedUrls'), d.today_blocked_urls);
+        countUp(document.getElementById('kpiBlockedApps'), d.today_blocked_apps);
+        var o;
+        if ((o = document.getElementById('kpiOnline')))  o.textContent = d.online_pcs;
+        if ((o = document.getElementById('kpiOffline'))) o.textContent = d.offline_pcs;
+        if ((o = document.getElementById('kpiPct')))     o.textContent = d.online_pct;
+
+        // Chart: 7 kunlik URL tashriflar
+        var w = document.getElementById('chartWeekly');
+        if (w) new Chart(w.getContext('2d'), {
+            type: 'line',
+            data: { labels: d.weekly_labels || [], datasets: [{
+                data: d.weekly_data || [],
+                borderColor: '#4dabf7', backgroundColor: 'rgba(77,171,247,0.15)',
                 fill: true, tension: 0.35, borderWidth: 2,
                 pointBackgroundColor: '#4dabf7', pointRadius: 4,
-            }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
-                x: { grid: { display: false } }
-            }
-        }
-    });
+            }]},
+            options: { responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } } }
+        });
 
-    var h = document.getElementById('chartHourly');
-    if (h) new Chart(h.getContext('2d'), {
-        type: 'bar',
-        data: {
-            labels: {{ hourly_labels|safe }},
-            datasets: [{
-                data: {{ hourly_data|safe }},
-                backgroundColor: 'rgba(255,152,0,0.6)',
-                borderColor: '#ff9800', borderWidth: 1,
-            }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
-                x: { grid: { display: false } }
-            }
-        }
-    });
+        // Chart: soatlik
+        var h = document.getElementById('chartHourly');
+        if (h) new Chart(h.getContext('2d'), {
+            type: 'bar',
+            data: { labels: d.hourly_labels || [], datasets: [{
+                data: d.hourly_data || [],
+                backgroundColor: 'rgba(255,152,0,0.6)', borderColor: '#ff9800', borderWidth: 1,
+            }]},
+            options: { responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } } }
+        });
 
-    var ac = document.getElementById('chartApps');
-    if (ac) {
-        var appsLabels = {{ apps_labels|safe }};
-        var appsData = {{ apps_data|safe }};
-        if (appsLabels.length) {
-            new Chart(ac.getContext('2d'), {
-                type: 'doughnut',
-                data: {
-                    labels: appsLabels,
-                    datasets: [{
-                        data: appsData,
+        // Chart: top dasturlar (doughnut)
+        var ac = document.getElementById('chartApps');
+        if (ac) {
+            if ((d.apps_labels || []).length) {
+                new Chart(ac.getContext('2d'), {
+                    type: 'doughnut',
+                    data: { labels: d.apps_labels, datasets: [{
+                        data: d.apps_data,
                         backgroundColor: ['#4dabf7','#4caf50','#ff9800','#e91e63','#9c27b0'],
                         borderColor: 'rgba(0,0,0,0.3)', borderWidth: 2,
-                    }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: {size:11} } } }
-                }
+                    }]},
+                    options: { responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: {size:11} } } } }
+                });
+            } else {
+                ac.parentElement.innerHTML = '<div style="text-align:center;color:#7d8fa8;padding:30px;">Ma\'lumot yo\'q</div>';
+            }
+        }
+
+        // Top saytlar
+        var tsEl = document.getElementById('topSitesList');
+        if (tsEl) {
+            var rows = (d.top_sites || []).map(function(s, i) {
+                var name = s.title || s.url || '';
+                if (name.length > 40) name = name.slice(0, 40) + '…';
+                return '<div class="list-row">' +
+                    '<span class="rank">#' + (i+1) + '</span>' +
+                    '<div class="name"><div title="' + esc(s.url) + '">' + esc(name) + '</div></div>' +
+                    '<span class="badge-num">' + (s.visits || 0) + '</span></div>';
             });
-        } else {
-            ac.parentElement.innerHTML = '<div style="text-align:center;color:#7d8fa8;padding:30px;">Ma\'lumot yo\'q</div>';
+            tsEl.innerHTML = rows.length ? rows.join('') :
+                '<div class="list-row" style="justify-content:center;color:#7d8fa8;">Ma\'lumot yo\'q</div>';
+        }
+
+        // Top davlatlar
+        var tcEl = document.getElementById('topCountriesList');
+        if (tcEl) {
+            var rows2 = (d.top_countries || []).map(function(c, i) {
+                return '<div class="list-row">' +
+                    '<span class="rank">#' + (i+1) + '</span>' +
+                    '<div class="name">' + flagEmoji(c.country_code) + ' ' + esc(c.country) + '</div>' +
+                    '<span class="badge-num orange">' + (c.cnt || 0) + '</span></div>';
+            });
+            tcEl.innerHTML = rows2.length ? rows2.join('') :
+                '<div class="list-row" style="justify-content:center;color:#7d8fa8;">Ma\'lumot yo\'q</div>';
         }
     }
+
+    function hideSpinner() {
+        var sp = document.getElementById('statsSpinner');
+        if (sp) sp.style.display = 'none';
+    }
+
+    fetch("{% url 'dashboard_data' %}", { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(d){ hideSpinner(); if (d) fillStats(d); })
+        .catch(function(){ hideSpinner(); });
 })();
 </script>
 

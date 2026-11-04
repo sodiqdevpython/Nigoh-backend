@@ -133,16 +133,33 @@ def logout_view(request):
 
 
 def home(request):
-    """Bosh sahifa — kengaytirilgan dashboard: KPI, xarita, chartlar, statistika."""
+    """Bosh sahifa — YENGIL shell. Sahifa darhol ochiladi. Barcha og'ir
+    statistika (KPI raqamlari, chartlar, top ro'yxatlar) `dashboard_data`
+    endpointidan AJAX bilan keladi — raqamlar 0 dan n gacha animatsiya bilan
+    to'ladi. Globus/xarita (geo) esa `external_connections_data` dan keladi.
+    Shu tariqa DB yoki geo sekin bo'lsa ham sahifa bloklanmaydi."""
+    context = {
+        # Globus origin markerlari — statik, arzon
+        'globe_origins_json': json.dumps(list(BUILDING_ORIGINS.values()) + [DEFAULT_ORIGIN]),
+        'server_origin_lat':  SERVER_ORIGIN['lat'],
+        'server_origin_lng':  SERVER_ORIGIN['lng'],
+        'is_super': request.user.is_superuser,
+    }
+    return render(request, 'menu/home/dashboard.html', context)
+
+
+@login_required
+def dashboard_data_json(request):
+    """Bosh sahifa statistikasi — JSON (KPI, chartlar, top ro'yxatlar).
+    Frontend sahifa ochilgach shu endpointni chaqiradi."""
+    from django.db.models.functions import TruncDate
+
     _mark_stale_offline()  # stale is_online'ni tuzatib olamiz
-    from django.db.models import Sum, Count
 
     now = timezone.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
     is_super = request.user.is_superuser
 
-    # Whitelist filter
     computer_qs = Computer.objects.all()
     if not is_super:
         computer_qs = computer_qs.filter(is_whitelisted=False)
@@ -150,66 +167,67 @@ def home(request):
     total_pcs = computer_qs.count()
     online_pcs = computer_qs.filter(is_online=True).count()
     offline_pcs = total_pcs - online_pcs
+    online_pct = round((online_pcs / total_pcs * 100) if total_pcs else 0)
     whitelist_pcs = Computer.objects.filter(is_whitelisted=True).count() if is_super else 0
     total_groups = Group.objects.count()
 
-    visible_ids = list(computer_qs.values_list('id', flat=True))
+    # Ko'rinadigan PClarga JOIN orqali filtrlash (katta `id__in` ro'yxati emas —
+    # minglab qurilmada ancha tezroq).
+    def vis(qs):
+        return qs if is_super else qs.filter(computer__is_whitelisted=False)
 
-    # Bugungi ma'lumot
-    today_activities = ActivityLog.objects.filter(
-        computer_id__in=visible_ids, created_at__gte=today_start,
-    )
+    today_activities = vis(ActivityLog.objects.filter(created_at__gte=today_start))
     today_url_visits = today_activities.exclude(url__isnull=True).exclude(url='').count()
-    today_blocked_urls = BlockedAttemptLog.objects.filter(
-        computer_id__in=visible_ids, created_at__gte=today_start,
-    ).aggregate(total=Sum('attempts_count'))['total'] or 0
-    today_blocked_apps = ProcessAlertLog.objects.filter(
-        computer_id__in=visible_ids, created_at__gte=today_start,
-    ).aggregate(total=Sum('attempts_count'))['total'] or 0
+    today_blocked_urls = vis(
+        BlockedAttemptLog.objects.filter(created_at__gte=today_start)
+    ).aggregate(t=Sum('attempts_count'))['t'] or 0
+    today_blocked_apps = vis(
+        ProcessAlertLog.objects.filter(created_at__gte=today_start)
+    ).aggregate(t=Sum('attempts_count'))['t'] or 0
 
     # Top 5 saytlar (bugun)
     top_sites = list(
         today_activities.exclude(url__isnull=True).exclude(url='')
         .values('url', 'title')
-        .annotate(visits=Count('id'), total_sec=Sum('duration_seconds'))
+        .annotate(visits=Count('id'))
         .order_by('-visits')[:5]
     )
 
     # Top 5 dasturlar (bugun)
     top_apps = list(
-        AppUsageStatistic.objects.filter(
-            computer_id__in=visible_ids, created_at__gte=today_start,
-        )
+        vis(AppUsageStatistic.objects.filter(created_at__gte=today_start))
         .values('app_name')
         .annotate(total_sec=Sum('active_seconds'))
         .order_by('-total_sec')[:5]
     )
 
-    # Oxirgi 7 kunlik aktivlik
-    weekly_activity = []
+    # Oxirgi 7 kunlik aktivlik — BITTA so'rovda (avval 7 ta alohida COUNT edi)
+    week_start = today_start - timedelta(days=6)
+    weekly_rows = (
+        vis(ActivityLog.objects.filter(created_at__gte=week_start))
+        .annotate(d=TruncDate('created_at')).values('d').annotate(c=Count('id'))
+    )
+    weekly_map = {r['d']: r['c'] for r in weekly_rows}
+    weekly_labels, weekly_data = [], []
     for i in range(6, -1, -1):
-        day = today_start - timedelta(days=i)
-        next_day = day + timedelta(days=1)
-        count = ActivityLog.objects.filter(
-            computer_id__in=visible_ids,
-            created_at__gte=day, created_at__lt=next_day,
-        ).count()
-        weekly_activity.append({
-            'date': day.strftime('%d %b'),
-            'count': count,
-        })
+        day = (today_start - timedelta(days=i)).date()
+        weekly_labels.append(day.strftime('%d %b'))
+        weekly_data.append(weekly_map.get(day, 0))
 
     # Bugungi soatlik aktivlik (24 soat)
-    hourly_activity = [0] * 24
-    hourly_qs = today_activities.extra(
-        select={'hour': "EXTRACT(hour FROM created_at)"},
-    ).values('hour').annotate(cnt=Count('id'))
-    for row in hourly_qs:
-        h = int(row['hour'] or 0)
-        if 0 <= h < 24:
-            hourly_activity[h] = row['cnt']
+    hourly = [0] * 24
+    try:
+        hourly_qs = today_activities.extra(
+            select={'hour': "EXTRACT(hour FROM created_at)"},
+        ).values('hour').annotate(cnt=Count('id'))
+        for row in hourly_qs:
+            h = int(row['hour'] or 0)
+            if 0 <= h < 24:
+                hourly[h] = row['cnt']
+    except Exception:
+        pass
 
-    # ===== TOP DAVLATLAR (geo cache dan) =====
+    # Top davlatlar (geo cache dan — arzon)
     try:
         from tracking.models import URLGeoCache
         top_countries = list(
@@ -222,24 +240,7 @@ def home(request):
     except Exception:
         top_countries = []
 
-    online_pct = round((online_pcs / total_pcs * 100) if total_pcs else 0)
-
-    # JSON chart data
-    weekly_labels = json.dumps([d['date'] for d in weekly_activity])
-    weekly_data   = json.dumps([d['count'] for d in weekly_activity])
-    hourly_labels = json.dumps([f"{h:02d}:00" for h in range(24)])
-    hourly_data   = json.dumps(hourly_activity)
-    apps_labels   = json.dumps([a['app_name'] for a in top_apps])
-    apps_data     = json.dumps([a['total_sec'] or 0 for a in top_apps])
-
-    # ===== GLOBUS + DUNYO XARITASI =====
-    # DIQQAT: domen -> IP -> geo hal qilish (DNS + ip-api.com) sekin (har domen
-    # uchun tarmoq so'rovi). Buni bosh sahifa yuklanishini bloklamasin uchun
-    # bu yerdan OLIB TASHLANDI. Template endi `external_connections_data`
-    # endpointidan AJAX orqali oladi — sahifa darhol ochiladi, globus/xarita
-    # bir lahzadan keyin to'ladi.
-
-    context = {
+    return JsonResponse({
         'total_pcs': total_pcs,
         'online_pcs': online_pcs,
         'offline_pcs': offline_pcs,
@@ -250,22 +251,14 @@ def home(request):
         'today_blocked_urls': today_blocked_urls,
         'today_blocked_apps': today_blocked_apps,
         'top_sites': top_sites,
-        'top_apps': top_apps,
         'top_countries': top_countries,
         'weekly_labels': weekly_labels,
         'weekly_data': weekly_data,
-        'hourly_labels': hourly_labels,
-        'hourly_data': hourly_data,
-        'apps_labels': apps_labels,
-        'apps_data': apps_data,
-        # Globus va dunyo xaritasi uchun (origin markerlar — statik, arzon;
-        # arcs esa AJAX bilan external_connections_data dan keladi)
-        'globe_origins_json': json.dumps(list(BUILDING_ORIGINS.values()) + [DEFAULT_ORIGIN]),
-        'server_origin_lat':  SERVER_ORIGIN['lat'],
-        'server_origin_lng':  SERVER_ORIGIN['lng'],
-        'is_super': is_super,
-    }
-    return render(request, 'menu/home/dashboard.html', context)
+        'hourly_labels': [f"{h:02d}:00" for h in range(24)],
+        'hourly_data': hourly,
+        'apps_labels': [a['app_name'] for a in top_apps],
+        'apps_data': [a['total_sec'] or 0 for a in top_apps],
+    })
 
 
 def group_management(request):

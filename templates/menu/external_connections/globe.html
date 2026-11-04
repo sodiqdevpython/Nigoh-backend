@@ -22,11 +22,6 @@
     .border-light-3 { border: 1px solid rgba(255, 255, 255, 0.15) !important; }
     .border-bottom-light-3 { border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important; }
 
-    /* OpenStreetMap plitalarini API kalitisiz qora temaga aylantiramiz */
-    #worldMap .leaflet-tile-pane {
-        filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
-    }
-
     /* ===== Globus konteyner ===== */
     .globe-card {
         position: relative;
@@ -845,10 +840,10 @@
                 worldCopyJump: true, zoomControl: true,
                 attributionControl: false,
             });
-            // OpenStreetMap — API kalit talab qilmaydi (CARTO endi kalit so'raydi).
-            // Qora tema CSS filter orqali beriladi (#worldMap .leaflet-tile-pane).
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                subdomains: 'abc', maxZoom: 6,
+            // Esri Dark Gray Canvas — kalitsiz va bloklamaydi, qorong'i tema
+            // (CARTO kalit so'raydi, OSM plita siyosati bo'yicha bloklaydi).
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 16, attribution: 'Tiles &copy; Esri',
             }).addTo(worldMap);
         }
 

@@ -5,6 +5,7 @@ urlpatterns = [
     path('login/', v.login_view, name='login'),
     path('logout/', v.logout_view, name='logout'),
     path('', v.home, name='home'),
+    path('dashboard/data.json', v.dashboard_data_json, name='dashboard_data'),
 
     path('groups/', v.group_management, name='group_management'),
 
