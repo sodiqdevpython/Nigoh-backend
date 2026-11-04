@@ -4,6 +4,13 @@ services:
     container_name: nigoh_redis
     restart: always
     # ═══════════════════════════════════════════════════════════════
+    # MUHIM: Redis endi PAROL talab qiladi (--requirepass).
+    # Parol .env dagi REDIS_PASSWORD dan olinadi. Django channel layer
+    # ham AYNAN shu parol bilan ulanishi SHART (.env dagi REDIS_URL):
+    #     REDIS_URL=redis://:<REDIS_PASSWORD>@redis:6379/0
+    # Agar ikkala parol mos kelmasa — WebSocket connect() 500 beradi va
+    # hech bir PC "online" bo'lmaydi (aynan shu nosozlik bor edi).
+    #
     # 3 qavat himoya:
     # 1) --save '' + --appendonly no   → persistence yo'q, restart'da toza state
     # 2) --replica-read-only no        → agar biror sabab bilan replica bo'lsa ham yozadi
@@ -11,22 +18,28 @@ services:
     # ═══════════════════════════════════════════════════════════════
     command: >
       redis-server
+      --requirepass "${REDIS_PASSWORD}"
       --save ""
       --appendonly no
       --replica-read-only no
       --protected-mode no
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     healthcheck:
-      # PING + role tekshirish. Replica bo'lsa darrov master ga o'giradi.
+      # PING + role tekshirish (endi PAROL bilan). Replica bo'lsa master ga o'giradi.
       test: >
-        sh -c "redis-cli PING > /dev/null &&
-               (redis-cli INFO replication | grep -q 'role:master' ||
-                redis-cli SLAVEOF NO ONE)"
+        sh -c "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" PING > /dev/null &&
+               (redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" INFO replication | grep -q 'role:master' ||
+                redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" SLAVEOF NO ONE)"
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 5s
+    # XAVFSIZLIK: Redis portini FAQAT server ichida (localhost) ochamiz.
+    # web konteyner unga docker ichki tarmog'i orqali 'redis:6379' bilan kiradi —
+    # tashqi internetga ochish SHART EMAS va xavfli edi (buzib kirish yo'li).
     ports:
-      - '6379:6379'
+      - '127.0.0.1:6379:6379'
 
   db:
     image: postgres:15-alpine
@@ -50,8 +63,10 @@ services:
       - POSTGRES_DB=${DB_NAME}
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
+    # XAVFSIZLIK: Postgres ham FAQAT server ichida (localhost) ochiladi.
+    # web konteyner unga 'db:5432' orqali kiradi; tashqi internetga chiqarmaymiz.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
   web:
     build: .
@@ -65,9 +80,12 @@ services:
       - .:/app
     ports:
       - "8000:8000"
+    # web faqat redis SOG'LOM (parol bilan PING o'tgach) bo'lgandan keyin ishga tushadi.
     depends_on:
-      - redis
-      - db
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_started
     env_file:
       - .env
     environment:
