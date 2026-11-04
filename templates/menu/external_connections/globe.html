@@ -22,6 +22,11 @@
     .border-light-3 { border: 1px solid rgba(255, 255, 255, 0.15) !important; }
     .border-bottom-light-3 { border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important; }
 
+    /* OpenStreetMap plitalarini API kalitisiz qora temaga aylantiramiz */
+    #worldMap .leaflet-tile-pane {
+        filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
+    }
+
     /* ===== Globus konteyner ===== */
     .globe-card {
         position: relative;
@@ -840,9 +845,10 @@
                 worldCopyJump: true, zoomControl: true,
                 attributionControl: false,
             });
-            // CartoDB Dark Matter — theme'ga mos qora fon
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                subdomains: 'abcd', maxZoom: 6,
+            // OpenStreetMap — API kalit talab qilmaydi (CARTO endi kalit so'raydi).
+            // Qora tema CSS filter orqali beriladi (#worldMap .leaflet-tile-pane).
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                subdomains: 'abc', maxZoom: 6,
             }).addTo(worldMap);
         }
 

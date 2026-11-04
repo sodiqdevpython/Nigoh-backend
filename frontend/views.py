@@ -15,6 +15,8 @@ from django.core.paginator import Paginator
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.cache import never_cache
 from functools import wraps
 from tracking.models import (
     AppUsageStatistic, ActivityLog, BlockedAttemptLog, ProcessAlertLog,
@@ -84,6 +86,8 @@ def staff_required(view_func):
     return wrapper
 
 
+@never_cache
+@ensure_csrf_cookie
 def login_view(request):
     # 1. Agar foydalanuvchi allaqachon tizimga kirgan bo'lsa, asosiy sahifaga yo'naltiramiz
     if request.user.is_authenticated:
@@ -205,14 +209,6 @@ def home(request):
         if 0 <= h < 24:
             hourly_activity[h] = row['cnt']
 
-    # ===== TOP GROUPS (xonalar) =====
-    top_groups = list(
-        computer_qs.filter(group__isnull=False)
-        .values('group__id', 'group__name', 'group__room_number', 'group__building', 'group__floor')
-        .annotate(pc_count=Count('id'), online_count=Count('id', filter=models.Q(is_online=True)))
-        .order_by('-online_count', '-pc_count')[:5]
-    )
-
     # ===== TOP DAVLATLAR (geo cache dan) =====
     try:
         from tracking.models import URLGeoCache
@@ -236,51 +232,12 @@ def home(request):
     apps_labels   = json.dumps([a['app_name'] for a in top_apps])
     apps_data     = json.dumps([a['total_sec'] or 0 for a in top_apps])
 
-    # ===== GLOBUS + DUNYO XARITASI uchun ma'lumot (external_connections dan) =====
-    # Bugungi ActivityLog + geo
-    from tracking.geo import extract_domain, resolve_domains_bulk
-    globe_activities = list(
-        today_activities
-        .exclude(url__isnull=True).exclude(url='')
-        .select_related('computer', 'computer__group')
-        .order_by('created_at')[:300]
-    )
-    domain_map = {}
-    for a in globe_activities:
-        try:
-            d = extract_domain(a.url)
-        except Exception:
-            d = None
-        if d:
-            domain_map[a.id] = d
-    try:
-        geo_map = resolve_domains_bulk(list(set(domain_map.values())), max_new=25)
-    except Exception:
-        geo_map = {}
-
-    globe_arcs = []
-    for a in globe_activities:
-        d = domain_map.get(a.id)
-        if not d:
-            continue
-        g = geo_map.get(d)
-        if not g:
-            continue
-        origin = _origin_for_computer(a.computer)
-        owner = (a.computer.owner if a.computer else '') or ''
-        hostname = (a.computer.hostname if a.computer else '') or ''
-        # Ko'rinishda `owner` afzal (bo'lsa), aks holda hostname
-        display_name = owner or hostname or 'Unknown'
-        globe_arcs.append({
-            'id':       str(a.id),
-            'domain':   d,
-            'hostname': display_name,          # asosiy ko'rsatiladigan nom
-            'owner':    owner,
-            'raw_hostname': hostname,
-            'ts':       a.created_at.isoformat(),
-            'origin':   origin,
-            'geo':      g,
-        })
+    # ===== GLOBUS + DUNYO XARITASI =====
+    # DIQQAT: domen -> IP -> geo hal qilish (DNS + ip-api.com) sekin (har domen
+    # uchun tarmoq so'rovi). Buni bosh sahifa yuklanishini bloklamasin uchun
+    # bu yerdan OLIB TASHLANDI. Template endi `external_connections_data`
+    # endpointidan AJAX orqali oladi — sahifa darhol ochiladi, globus/xarita
+    # bir lahzadan keyin to'ladi.
 
     context = {
         'total_pcs': total_pcs,
@@ -294,7 +251,6 @@ def home(request):
         'today_blocked_apps': today_blocked_apps,
         'top_sites': top_sites,
         'top_apps': top_apps,
-        'top_groups': top_groups,
         'top_countries': top_countries,
         'weekly_labels': weekly_labels,
         'weekly_data': weekly_data,
@@ -302,9 +258,9 @@ def home(request):
         'hourly_data': hourly_data,
         'apps_labels': apps_labels,
         'apps_data': apps_data,
-        # Globus va dunyo xaritasi uchun
+        # Globus va dunyo xaritasi uchun (origin markerlar — statik, arzon;
+        # arcs esa AJAX bilan external_connections_data dan keladi)
         'globe_origins_json': json.dumps(list(BUILDING_ORIGINS.values()) + [DEFAULT_ORIGIN]),
-        'globe_arcs_json':    json.dumps(globe_arcs),
         'server_origin_lat':  SERVER_ORIGIN['lat'],
         'server_origin_lng':  SERVER_ORIGIN['lng'],
         'is_super': is_super,
@@ -387,15 +343,24 @@ def device_list_view(request):
     floor_id = request.GET.get('floor', '')
     group_id = request.GET.get('group', '')
 
-    # 2. Barcha kompyuterlarni chaqiramiz
-    computers = Computer.objects.select_related('group').order_by('hostname')
+    # 2. Barcha kompyuterlarni chaqiramiz.
+    #    Onlayn qurilmalar HAR DOIM ro'yxatda yuqorida tursin (-is_online),
+    #    keyin nom bo'yicha tartiblanadi.
+    computers = Computer.objects.select_related('group').order_by('-is_online', 'hostname')
 
-    # 3. Izlash (Nomi yoki UUID)
+    # 3. Universal izlash — nom (hostname), egasi (owner), ID (device_id /
+    #    bios_uuid), MAC manzil, protsessor, guruh nomi va xona raqami bo'yicha.
     if search_query:
         computers = computers.filter(
             Q(hostname__icontains=search_query) |
-            Q(bios_uuid__icontains=search_query)
-        )
+            Q(owner__icontains=search_query) |
+            Q(device_id__icontains=search_query) |
+            Q(bios_uuid__icontains=search_query) |
+            Q(mac_address__icontains=search_query) |
+            Q(cpu_info__icontains=search_query) |
+            Q(group__name__icontains=search_query) |
+            Q(group__room_number__icontains=search_query)
+        ).distinct()
 
     # ==========================================
     # 4. AQLLI FILTRLAR (Bino, Qavat, Xona)

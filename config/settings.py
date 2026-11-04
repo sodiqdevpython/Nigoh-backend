@@ -31,6 +31,27 @@ DEBUG = False
 
 ALLOWED_HOSTS = ["*"]
 
+# CSRF — IP orqali (89.39.94.50) kirilganda "CSRF verification failed" (403)
+# xatosini oldini oladi. Django 4.0+ da POST so'rovlarda Origin sarlavhasi
+# shu ro'yxatga mos kelishi kerak. Server IP/domenlarini .env orqali ham
+# qo'shish mumkin: CSRF_TRUSTED_ORIGINS=https://example.com,https://www.example.com
+CSRF_TRUSTED_ORIGINS = [
+    'http://89.39.94.50',
+    'http://89.39.94.50:8000',
+    'https://89.39.94.50',
+    'https://89.39.94.50:8000',
+]
+_extra_csrf = env('CSRF_TRUSTED_ORIGINS', default='')
+if _extra_csrf:
+    CSRF_TRUSTED_ORIGINS += [o.strip() for o in _extra_csrf.split(',') if o.strip()]
+
+# HTTP (HTTPS emas) orqali kirilganligi uchun cookie'lar Secure bo'lmasligi kerak,
+# aks holda mobil brauzer csrftoken cookie'ni yubormaydi va 403 chiqadi.
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'Lax'
+
 
 # Application definition
 

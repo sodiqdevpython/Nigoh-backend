@@ -93,6 +93,10 @@
     }
     /* Dunyo xaritasi */
     #dashWorldMap { height: 420px; background:#0a0f1c; border-radius: 8px; }
+    /* OpenStreetMap plitalarini API kalitisiz qora temaga aylantiramiz */
+    #dashWorldMap .leaflet-tile-pane {
+        filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
+    }
 </style>
 
 <div class="content-wrapper">
@@ -249,7 +253,7 @@
 
         <!-- ===== TOP LISTS ROW ===== -->
         <div class="row mb-4">
-            <div class="col-lg-4 mb-3">
+            <div class="col-lg-6 mb-3">
                 <div class="sec-card">
                     <div class="sec-header">
                         <div>
@@ -270,29 +274,7 @@
                     {% endfor %}
                 </div>
             </div>
-            <div class="col-lg-4 mb-3">
-                <div class="sec-card">
-                    <div class="sec-header">
-                        <div>
-                            <h6><i class="zmdi zmdi-folder mr-2" style="color:#4dabf7"></i> Faol xonalar</h6>
-                            <div class="sub">Eng ko'p onlayn PClar</div>
-                        </div>
-                    </div>
-                    {% for g in top_groups %}
-                        <div class="list-row">
-                            <span class="rank">#{{ forloop.counter }}</span>
-                            <div class="name">
-                                <div>{{ g.group__room_number|default:g.group__name }}</div>
-                                <div class="sub-name">{{ g.pc_count }} PC · {{ g.online_count }} onlayn</div>
-                            </div>
-                            <span class="badge-num green">{{ g.online_count }}</span>
-                        </div>
-                    {% empty %}
-                        <div class="list-row" style="justify-content:center;color:#7d8fa8;">Ma'lumot yo'q</div>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="col-lg-4 mb-3">
+            <div class="col-lg-6 mb-3">
                 <div class="sec-card">
                     <div class="sec-header">
                         <div>
@@ -321,7 +303,6 @@
 
 <!-- ===== DATA (safe JSON) ===== -->
 <script id="dashOrigins" type="application/json">{{ globe_origins_json|safe }}</script>
-<script id="dashArcs"    type="application/json">{{ globe_arcs_json|safe }}</script>
 
 <script>
 (function() {
@@ -342,10 +323,14 @@
         el.textContent = flagEmoji(el.dataset.cc);
     });
 
-    // Data'ni JSON dan olamiz
+    // Origin markerlar — server'dan (statik, arzon). Arcs (geo) esa AJAX bilan
+    // keyin yuklanadi — shuning uchun bosh sahifa darhol ochiladi.
     var origins = [], arcs = [];
     try { origins = JSON.parse(document.getElementById('dashOrigins').textContent); } catch(e) {}
-    try { arcs    = JSON.parse(document.getElementById('dashArcs').textContent);    } catch(e) {}
+
+    // Globus va xarita arcs kelganda ularni to'ldirish uchun funksiyalar
+    var seedGlobe = function(){};      // globus arcs playback'ini boshlaydi
+    var drawWorldMap = function(){};   // dunyo xaritasiga markerlar qo'yadi
 
     // ===== GLOBE =====
     var globeEl = document.getElementById('dashGlobe');
@@ -432,13 +417,15 @@
             globe.ringsData(originRings.concat(destRings));
         }
 
-        // Boshlang'ich burst — oxirgi 3 arc darhol chiqsin
-        if (arcs.length > 0) {
+        // seedGlobe — arcs AJAX bilan kelgach chaqiriladi (oxirgi 3 arc darhol chiqsin)
+        seedGlobe = function() {
+            queue = [];
             var burstStart = Math.max(0, arcs.length - 3);
             for (var i = burstStart; i < arcs.length; i++) queue.push(buildArc(arcs[i]));
             seen = arcs.length;
-        }
-        render();
+            render();
+        };
+        render();  // bo'sh holatda ham globusni ko'rsatamiz
 
         setInterval(function() {
             if (!arcs.length) return;
@@ -470,27 +457,35 @@
             center: [20, 30], zoom: 2, minZoom: 2, maxZoom: 6,
             worldCopyJump: true, zoomControl: true, attributionControl: false,
         });
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            subdomains: 'abcd', maxZoom: 6,
+        // OpenStreetMap — API kalit talab qilmaydi (CARTO endi kalit so'raydi,
+        // shuning uchun "API KEY REQUIRED" chiqar edi). Qora tema CSS filter
+        // orqali beriladi (yuqoridagi .leaflet-tile-pane).
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            subdomains: 'abc', maxZoom: 6,
         }).addTo(wm);
+        setTimeout(function(){ wm.invalidateSize(); }, 200);
 
-        // Davlatlar bo'yicha jamlaymiz
-        var byCountry = {};
-        arcs.forEach(function(a) {
-            var g = a.geo || {};
-            var k = g.country || '';
-            if (!k) return;
-            if (!byCountry[k]) {
-                byCountry[k] = {
-                    country: k, code: g.country_code || '',
-                    lat: g.lat, lng: g.lng, count: 0, domains: {}
-                };
-            }
-            byCountry[k].count++;
-            byCountry[k].domains[a.domain] = (byCountry[k].domains[a.domain] || 0) + 1;
-        });
-        var list = Object.values(byCountry);
-        if (list.length) {
+        var wmMarkers = [];
+        drawWorldMap = function() {
+            wmMarkers.forEach(function(m){ wm.removeLayer(m); });
+            wmMarkers = [];
+            // Davlatlar bo'yicha jamlaymiz
+            var byCountry = {};
+            arcs.forEach(function(a) {
+                var g = a.geo || {};
+                var k = g.country || '';
+                if (!k) return;
+                if (!byCountry[k]) {
+                    byCountry[k] = {
+                        country: k, code: g.country_code || '',
+                        lat: g.lat, lng: g.lng, count: 0, domains: {}
+                    };
+                }
+                byCountry[k].count++;
+                byCountry[k].domains[a.domain] = (byCountry[k].domains[a.domain] || 0) + 1;
+            });
+            var list = Object.values(byCountry);
+            if (!list.length) return;
             var maxC = Math.max.apply(null, list.map(function(c){ return c.count; }));
             list.forEach(function(c) {
                 if (!c.lat || !c.lng) return;
@@ -499,7 +494,7 @@
                     ? String.fromCodePoint.apply(null, [...c.code.toUpperCase()].map(function(x){return 127397+x.charCodeAt(0);}))
                     : '🌐';
                 var doms = Object.keys(c.domains).slice(0,5).join(', ');
-                L.circleMarker([c.lat, c.lng], {
+                var mk = L.circleMarker([c.lat, c.lng], {
                     radius: r, fillColor: '#4dabf7', color: '#4dabf7',
                     weight: 2, opacity: 0.9, fillOpacity: 0.45,
                 }).addTo(wm).bindPopup(
@@ -509,10 +504,22 @@
                     '<div><b>Domenlar:</b> ' + doms + (Object.keys(c.domains).length > 5 ? '...' : '') + '</div>' +
                     '</div>'
                 );
+                wmMarkers.push(mk);
             });
-        }
-        setTimeout(function(){ wm.invalidateSize(); }, 200);
+        };
     }
+
+    // ===== ARCS'NI AJAX BILAN YUKLAYMIZ (geo sekin — sahifa bloklanmasin) =====
+    fetch("{% url 'external_connections_data' %}", { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(data){
+            if (!data) return;
+            arcs = data.arcs || [];
+            if ((!origins || !origins.length) && data.origins) origins = data.origins;
+            try { seedGlobe(); } catch(e) {}
+            try { drawWorldMap(); } catch(e) {}
+        })
+        .catch(function(){ /* jim — globus/xarita bo'sh qoladi */ });
 
     // ===== CHARTS =====
     Chart.defaults.color = '#adb5bd';
