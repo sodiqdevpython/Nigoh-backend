@@ -341,11 +341,34 @@
         controls.zoomSpeed = 1.2;
         controls.minDistance = 130; controls.maxDistance = 500;
 
-        // Deterministic altitude — bir manzilga ko'p bog'lanish ustma-ust chiqmasin
-        function hashAlt(id) {
-            var h = 0; var s = String(id || '');
+        // ── Yoy geometriyasi (favvora effekti) ───────────────────────────
+        function hashCode(s) {
+            var h = 0; s = String(s || '');
             for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-            return 0.15 + (Math.abs(h) % 40) / 100;
+            return Math.abs(h);
+        }
+        // Ikki nuqta orasidagi burchak masofa (0..π radian)
+        function gcDist(aLat, aLng, bLat, bLng) {
+            var R = Math.PI / 180;
+            var dLat = (bLat - aLat) * R, dLng = (bLng - aLng) * R;
+            var s = Math.sin(dLat/2)*Math.sin(dLat/2) +
+                    Math.cos(aLat*R)*Math.cos(bLat*R)*Math.sin(dLng/2)*Math.sin(dLng/2);
+            return 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+        }
+        // Masofaga qarab yoyiladi; bir nuqtaga ulanishlar to'g'ri vertikal
+        // chiziq bo'lib qolmay, favvora kabi turli yo'nalishda qiyshayib tushadi.
+        function arcGeom(id, sLat, sLng, eLat, eLng) {
+            var hv = hashCode(id);
+            var frac = gcDist(sLat, sLng, eLat, eLng) / Math.PI;   // 0..1
+            if (frac < 0.02) {   // deyarli bir nuqta — manzilni biroz suramiz
+                var ang = (hv % 360) * Math.PI / 180;
+                eLat += Math.cos(ang) * 1.3;
+                eLng += Math.sin(ang) * 1.3;
+                frac = gcDist(sLat, sLng, eLat, eLng) / Math.PI;
+            }
+            var jitter = (hv % 25) / 100;                          // 0..0.25
+            var alt = Math.max(0.12, frac * 0.75) * (1 + jitter);
+            return { endLat: eLat, endLng: eLng, altitude: alt > 0.6 ? 0.6 : alt };
         }
 
         var COLORS = ['#4caf50','#4dabf7','#ff9800','#e91e63','#9c27b0','#00bcd4'];
@@ -370,6 +393,7 @@
         globe
             .arcColor('color')
             .arcAltitude(function(d){ return d.__altitude; })
+            .arcCurveResolution(64)
             .arcStroke(0.7).arcDashLength(0.5).arcDashGap(0.12)
             .arcDashAnimateTime(6000)
             .arcLabel('tooltip');
@@ -386,13 +410,14 @@
 
         function buildArc(a) {
             var c = nextColor(ci++);
+            var g = arcGeom(a.id + '|' + a.domain, a.origin.lat, a.origin.lng, a.geo.lat, a.geo.lng);
             return {
                 startLat: a.origin.lat, startLng: a.origin.lng,
-                endLat: a.geo.lat, endLng: a.geo.lng,
+                endLat: g.endLat, endLng: g.endLng,
                 color: [c, c + '55'],
                 tooltip: a.hostname + ' → ' + a.domain,
                 createdAt: Date.now(),
-                __altitude: hashAlt(a.id + '|' + a.domain),
+                __altitude: g.altitude,
             };
         }
 
