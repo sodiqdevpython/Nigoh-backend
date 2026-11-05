@@ -248,6 +248,95 @@ class PendingCommand(BaseModel):
         return self.acknowledged_at is None and self.attempts >= self.MAX_ATTEMPTS
 
 
+class ScheduledScript(BaseModel):
+    """
+    Rejalashtirilgan script — har kuni bir marta online bo'lgan PC'larda bajariladi.
+
+    Admin paneldan yaratilgandan so'ng:
+      - PC WebSocket orqali ulangan paytda dispatcher tekshiradi
+      - Bu script bugun shu PC'da ishga tushganmi? Yo'q bo'lsa → do_command yuboradi
+      - Natija TerminalExecution'ga yoziladi (scheduled_script FK)
+      - Keyingi kun (00:00 UTC'dan keyin) yana ishlaydi
+
+    Masalan:
+      - Har kuni foydalanuvchi disk'ini tozalash
+      - Har kuni logilar yig'ish
+      - Yangi PC ro'yxatga olinganda muhit sozlash
+    """
+
+    TARGET_ALL = 'all'
+    TARGET_SPECIFIC = 'specific'
+    TARGET_CHOICES = [
+        (TARGET_ALL,      'Barcha PC\'lar'),
+        (TARGET_SPECIFIC, 'Tanlangan PC\'lar'),
+    ]
+
+    SHELL_CMD = 'cmd'
+    SHELL_PWSH = 'powershell'
+    SHELL_CHOICES = [
+        (SHELL_CMD,  'CMD'),
+        (SHELL_PWSH, 'PowerShell'),
+    ]
+
+    name = models.CharField(
+        max_length=200,
+        help_text="Qisqa nom, masalan: 'Kunlik disk tozalash' yoki 'Yangi PC sozlash'"
+    )
+    description = models.TextField(blank=True, default='',
+        help_text="Nima ish qiladi, nega kerak — admin ko'rish uchun")
+
+    command_text = models.TextField(
+        help_text="Script matni. Multi-line, uzun — hech qanday cheklov yo'q (100 KB gacha)"
+    )
+    shell = models.CharField(
+        max_length=20, choices=SHELL_CHOICES, default=SHELL_CMD,
+        help_text="Qaysi shell'da ishga tushadi"
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        help_text="False bo'lsa — yangi PC'larga yuborilmaydi, lekin tarix saqlanadi"
+    )
+
+    target_mode = models.CharField(
+        max_length=20, choices=TARGET_CHOICES, default=TARGET_ALL,
+        help_text="'Barcha' — har qanday online PC, 'Tanlangan' — faqat ro'yxatdagi PC'lar"
+    )
+    target_computers = models.ManyToManyField(
+        'endpoints.Computer', blank=True, related_name='scheduled_scripts',
+        help_text="target_mode='specific' bo'lsa — qaysi PC'larda ishlasin"
+    )
+    include_new_devices = models.BooleanField(
+        default=False,
+        help_text="Yangi ro'yxatga olingan PC'larda ham AVTOMATIK ishga tushsin "
+                  "(target_mode='specific' da ham yangi PC'lar qo'shiladi)"
+    )
+
+    # Audit — kim yaratgan
+    created_by = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='scheduled_scripts',
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        state = '✓' if self.is_active else '✗'
+        return f"[{state}] {self.name} ({self.shell})"
+
+    def is_applicable_to(self, computer, is_newly_created=False):
+        """Bu PC uchun shu script qo'llanadigan bo'ladimi?"""
+        if not self.is_active:
+            return False
+        if self.target_mode == self.TARGET_ALL:
+            return True
+        # TARGET_SPECIFIC
+        if is_newly_created and self.include_new_devices:
+            return True
+        return self.target_computers.filter(id=computer.id).exists()
+
+
 class TerminalExecution(BaseModel):
     """
     Admin terminalda yuborgan buyruq va natijasi.
@@ -294,6 +383,20 @@ class TerminalExecution(BaseModel):
     shell = models.CharField(max_length=20, choices=SHELL_CHOICES, default=SHELL_CMD)
     command_text = models.TextField(help_text="To'liq buyruq matni (multi-line ham bo'ladi)")
 
+    # Agar bu execution rejalashtirilgan script'dan kelib chiqqan bo'lsa — FK.
+    # Admin terminal'dan qo'lda yuborilgan bo'lsa — NULL.
+    scheduled_script = models.ForeignKey(
+        'ScheduledScript', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='executions',
+        help_text="Agar bu execution ScheduledScript'dan kelib chiqqan bo'lsa"
+    )
+    # Scheduled script uchun — qaysi kuni ishga tushgan. Dispatcher bir kunga
+    # bir marta ishga tushirish uchun shu maydonga unique_together bilan tayanadi.
+    executed_date = models.DateField(
+        null=True, blank=True,
+        help_text="Scheduled script uchun — qaysi kuni ishladi"
+    )
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     stdout = models.TextField(blank=True, default='')
     stderr = models.TextField(blank=True, default='')
@@ -304,7 +407,18 @@ class TerminalExecution(BaseModel):
 
     class Meta:
         ordering = ['-created_at']
-        indexes = [models.Index(fields=['computer', '-created_at'])]
+        indexes = [
+            models.Index(fields=['computer', '-created_at']),
+            models.Index(fields=['scheduled_script', 'executed_date']),
+        ]
+        constraints = [
+            # Bir PC'da bitta ScheduledScript bir kunda faqat 1 marta ishga tushsin
+            models.UniqueConstraint(
+                fields=['scheduled_script', 'computer', 'executed_date'],
+                condition=models.Q(scheduled_script__isnull=False),
+                name='uniq_scheduled_exec_per_day',
+            ),
+        ]
 
     def __str__(self):
         first_line = (self.command_text or '').splitlines()[0] if self.command_text else ''

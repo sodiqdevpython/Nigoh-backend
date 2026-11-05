@@ -45,7 +45,7 @@ class ComputerConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.pc_room_name, self.channel_name)
 
         # Agent yangi qurilma bo'lsa — avtomatik yaratiladi (404 emas)
-        await self.ensure_computer_exists()
+        self._is_newly_created = await self.ensure_computer_exists()
 
         self.group_id = await self.get_computer_group_id()
         if self.group_id:
@@ -59,7 +59,11 @@ class ComputerConsumer(AsyncWebsocketConsumer):
 
         await self.set_online_status(True)
         await self.accept()
-        print(f"[+] Ulandi: {self.key} | Guruh: {self.group_id}")
+        print(f"[+] Ulandi: {self.key} | Guruh: {self.group_id}{' (YANGI)' if self._is_newly_created else ''}")
+
+        # Scheduled scriptlarni dispatch qilamiz — PC har kun online bo'lganda
+        # bir marta applicable scriptlar ishga tushadi (DB uniqueness bilan kafolat).
+        await self.dispatch_scheduled_scripts()
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.pc_room_name, self.channel_name)
@@ -172,9 +176,11 @@ class ComputerConsumer(AsyncWebsocketConsumer):
         return 'bios_uuid', self.bios_uuid
 
     async def ensure_computer_exists(self):
-        """Yangi qurilma birinchi marta ulansa — avtomatik yozuv yaratamiz."""
+        """Yangi qurilma birinchi marta ulansa — avtomatik yozuv yaratamiz.
+        Qaytaradi: True — bu birinchi ulanish (yangi yaratildi), False — mavjud edi.
+        """
         if not self.device_id:
-            return  # eski agentlar — register/ orqali avval kelishi kerak
+            return False  # eski agentlar — register/ orqali avval kelishi kerak
         try:
             pool = await get_pool()
             # Avval mavjudligini tekshiramiz (oddiy INSERT auth_token NOT NULL bilan xato bermasin)
@@ -183,7 +189,7 @@ class ComputerConsumer(AsyncWebsocketConsumer):
                 self.device_id
             )
             if row:
-                return  # mavjud — INSERT shart emas
+                return False  # mavjud — INSERT shart emas
 
             # Yangi yozuv yaratamiz. auth_token endi NULLABLE.
             await pool.execute(
@@ -193,8 +199,39 @@ class ComputerConsumer(AsyncWebsocketConsumer):
                    ON CONFLICT (device_id) DO NOTHING''',
                 self.device_id, 'unknown'
             )
+            return True
         except Exception as e:
             print(f"[ensure_computer_exists xato] {e}")
+            return False
+
+    async def dispatch_scheduled_scripts(self):
+        """PC online bo'lgan paytda — applicable scheduled scriptlarni ishga tushirish.
+
+        Dispatcher sync kod — Django ORM'ga tayanadi. Shuning uchun asgiref'ning
+        `sync_to_async` ichida chaqiramiz. WS receive loop'ni bloklamaydi.
+
+        DB uniqueness (scheduled_script, computer, executed_date=today) tufayli
+        bir kuniga bir marta kafolati bor — concurrent connectlarda ham race yo'q.
+        """
+        from asgiref.sync import sync_to_async
+        from endpoints.models import Computer
+        from commands.services import dispatch_scheduled_scripts_for
+
+        try:
+            computer = await sync_to_async(
+                Computer.objects.filter(device_id=self.device_id).first
+                if self.device_id
+                else Computer.objects.filter(bios_uuid=self.bios_uuid).first
+            )()
+            if not computer:
+                return
+
+            is_new = getattr(self, '_is_newly_created', False)
+            n = await sync_to_async(dispatch_scheduled_scripts_for)(computer, is_newly_created=is_new)
+            if n > 0:
+                print(f"[+] {self.key} ulandi — {n} ta scheduled script yuborildi")
+        except Exception as e:
+            print(f"[dispatch_scheduled_scripts WS xato] {e}")
 
     async def get_computer_group_id(self):
         try:

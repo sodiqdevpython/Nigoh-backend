@@ -3,7 +3,7 @@ from django.utils.html import format_html
 
 from endpoints.models import Computer
 from utils.admin_bulk import BulkDeleteAdminMixin
-from .models import PendingCommand, Release, TerminalExecution, UpdateFile, UpdateLog
+from .models import PendingCommand, Release, ScheduledScript, TerminalExecution, UpdateFile, UpdateLog
 from .services import trigger_uninstall, trigger_update
 
 
@@ -155,13 +155,82 @@ class UpdateLogAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
 
 @admin.register(TerminalExecution)
 class TerminalExecutionAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
-    list_display = ['computer', 'shell', 'short_cmd', 'status', 'exit_code', 'requested_by', 'created_at']
-    list_filter = ['shell', 'status']
+    list_display = ['computer', 'shell', 'short_cmd', 'status', 'exit_code',
+                    'source_display', 'executed_date', 'requested_by', 'created_at']
+    list_filter = ['shell', 'status', 'scheduled_script']
     search_fields = ['computer__hostname', 'computer__device_id', 'command_text']
-    readonly_fields = ['created_at', 'updated_at', 'started_at', 'finished_at', 'stdout', 'stderr', 'exit_code']
+    readonly_fields = ['created_at', 'updated_at', 'started_at', 'finished_at',
+                       'stdout', 'stderr', 'exit_code', 'executed_date', 'scheduled_script']
     list_per_page = 50
 
     def short_cmd(self, obj):
         text = (obj.command_text or '').splitlines()
         return (text[0] if text else '')[:80]
     short_cmd.short_description = 'Buyruq'
+
+    def source_display(self, obj):
+        if obj.scheduled_script_id:
+            return format_html('<span style="color:#0288d1">⏰ Scheduled</span>')
+        return format_html('<span style="color:#888">👤 Manual</span>')
+    source_display.short_description = 'Manba'
+
+
+@admin.register(ScheduledScript)
+class ScheduledScriptAdmin(admin.ModelAdmin):
+    list_display = ['name', 'shell', 'target_mode', 'include_new_devices',
+                    'is_active', 'exec_count_display', 'created_by', 'created_at']
+    list_filter = ['shell', 'target_mode', 'is_active', 'include_new_devices']
+    search_fields = ['name', 'description', 'command_text']
+    filter_horizontal = ['target_computers']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Umumiy', {
+            'fields': ('name', 'description', 'is_active'),
+            'description': "Script nomini qisqa va aniq yozing. 'is_active'=False bo'lsa script "
+                           "yangi PC'larda ishga tushmaydi, lekin tarix saqlanadi."
+        }),
+        ('Buyruq', {
+            'fields': ('shell', 'command_text'),
+            'description': "Multi-line va uzun script yozsa bo'ladi. Terminal sahifasidagi kabi "
+                           "yangi qatorlar va tirnoqlar muammo qilmaydi."
+        }),
+        ('Kimlarda ishga tushsin', {
+            'fields': ('target_mode', 'target_computers', 'include_new_devices'),
+            'description': "'Barcha PClar' — har qanday online bo'lgan PC'da bir kuniga 1 marta "
+                           "ishga tushadi. 'Tanlangan PC'lar' — faqat ro'yxatdagilar. "
+                           "'include_new_devices' — yangi ro'yxatga olingan PC'larda ham AVTOMATIK."
+        }),
+        ('Audit', {
+            'classes': ('collapse',),
+            'fields': ('created_by', 'created_at', 'updated_at'),
+        }),
+    )
+
+    actions = ['run_now_on_all_applicable']
+
+    def exec_count_display(self, obj):
+        # Oxirgi 7 kundagi ishga tushishlar soni
+        from datetime import date, timedelta
+        week_ago = date.today() - timedelta(days=7)
+        cnt = obj.executions.filter(executed_date__gte=week_ago).count()
+        return f"{cnt} (7 kun)"
+    exec_count_display.short_description = 'Oxirgi 7 kun'
+
+    def save_model(self, request, obj, form, change):
+        if not change and not obj.created_by_id:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+    @admin.action(description="Hoziroq barcha ONLAYN PC'larda ishga tushirish (bir martalik force)")
+    def run_now_on_all_applicable(self, request, queryset):
+        from .services import dispatch_scheduled_script_now
+        total = 0
+        for script in queryset:
+            n = dispatch_scheduled_script_now(script, requested_by=request.user)
+            total += n
+        self.message_user(
+            request,
+            f"✓ {total} ta PC'ga yuborildi (onlayn va applicable)",
+            level=messages.SUCCESS,
+        )

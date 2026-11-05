@@ -82,6 +82,25 @@ def trigger_restart(computer):
     return cmd
 
 
+def _build_terminal_one_liner(exec_id, server_url):
+    """`do_command` orqali agentga yuboriladigan PowerShell bir-liner.
+
+    Agent bu bir-linerni mavjud `SystemCommandManager.ExecuteHiddenCommand` orqali
+    bajaradi — u esa backend'dan to'liq script yuklab olib ishlatadi.
+    """
+    base = server_url.rstrip('/')
+    script_url = f'{base}/api/agent/terminal/{exec_id}/script.ps1'
+    error_url = f'{base}/api/agent/terminal/upload-error/'
+    return (
+        "try{"
+        "[System.Net.ServicePointManager]::SecurityProtocol=[System.Net.SecurityProtocolType]::Tls12;"
+        f"(New-Object Net.WebClient).DownloadString('{script_url}') | Invoke-Expression"
+        "}catch{"
+        f"(New-Object Net.WebClient).UploadString('{error_url}','exec_id={exec_id}&error='+[System.Uri]::EscapeDataString($_.Exception.Message))"
+        "}"
+    )
+
+
 def trigger_exec_terminal(computer, command_text, shell='cmd', requested_by=None, server_url=''):
     """
     Admin terminalda yuborgan buyruqni agentga uzatadi.
@@ -113,19 +132,7 @@ def trigger_exec_terminal(computer, command_text, shell='cmd', requested_by=None
         status=TerminalExecution.STATUS_PENDING,
     )
 
-    script_url = f'{server_url.rstrip("/")}/api/agent/terminal/{exec_.id}/script.ps1'
-
-    # PowerShell bir-qatorli — agent uni `do_command` orqali ijro qiladi:
-    #   `powershell -Command "${this}"` → ichida DownloadString+iex ishlaydi
-    # Backend qaytargan script ichida userning command'i va upload URL bor.
-    one_liner = (
-        "try{"
-        "[System.Net.ServicePointManager]::SecurityProtocol=[System.Net.SecurityProtocolType]::Tls12;"
-        f"(New-Object Net.WebClient).DownloadString('{script_url}') | Invoke-Expression"
-        "}catch{"
-        f"(New-Object Net.WebClient).UploadString('{server_url.rstrip('/')}/api/agent/terminal/upload-error/','exec_id={exec_.id}&error='+[System.Uri]::EscapeDataString($_.Exception.Message))"
-        "}"
-    )
+    one_liner = _build_terminal_one_liner(exec_.id, server_url)
 
     push_command_to_agent(computer, {
         'type':    'do_command',
@@ -135,3 +142,177 @@ def trigger_exec_terminal(computer, command_text, shell='cmd', requested_by=None
     })
 
     return exec_
+
+
+# ═══════════════════════════════════════════════════════════════════
+# SCHEDULED SCRIPTS — har kuni online bo'lganda bir marta ishga tushadi
+# ═══════════════════════════════════════════════════════════════════
+
+def _get_server_url_from_env():
+    """Settings'dan server URL ni oladi. SERVER_URL env variable yoki fallback."""
+    import os
+    return (os.environ.get('SERVER_URL')
+            or os.environ.get('SITE_URL')
+            or 'http://localhost:8000').rstrip('/')
+
+
+def dispatch_scheduled_scripts_for(computer, is_newly_created=False, server_url=None):
+    """
+    PC online bo'lgan paytda chaqiriladi.
+
+    Har bir aktiv ScheduledScript uchun:
+      - Shu PC uchun applicable ekanligi tekshiriladi
+      - Bugun shu PC'da shu script allaqachon ishga tushganmi?
+        Yo'q bo'lsa — TerminalExecution yaratiladi va `do_command` yuboriladi
+      - Bir kunga bir marta kafolati UniqueConstraint bilan ta'minlanadi
+
+    Return: ishga tushirilgan scriptlar soni.
+    """
+    from datetime import date, timedelta
+    from django.db import IntegrityError
+    from .models import ScheduledScript, TerminalExecution
+
+    if not computer:
+        return 0
+
+    today = date.today()
+    server_url = server_url or _get_server_url_from_env()
+    dispatched = 0
+
+    try:
+        active_scripts = ScheduledScript.objects.filter(is_active=True)
+    except Exception as e:
+        print(f"[dispatch_scheduled xato] {e}")
+        return 0
+
+    for script in active_scripts:
+        try:
+            if not script.is_applicable_to(computer, is_newly_created=is_newly_created):
+                continue
+
+            # Bugun ishga tushganmi? — DB darajasidagi uniqueness
+            already = TerminalExecution.objects.filter(
+                scheduled_script=script,
+                computer=computer,
+                executed_date=today,
+            ).exists()
+            if already:
+                continue
+
+            # Yangi execution yaratamiz — UniqueConstraint tufayli race-condition'siz
+            try:
+                exec_ = TerminalExecution.objects.create(
+                    computer=computer,
+                    scheduled_script=script,
+                    executed_date=today,
+                    shell=script.shell,
+                    command_text=script.command_text,
+                    status=TerminalExecution.STATUS_PENDING,
+                )
+            except IntegrityError:
+                # Boshqa consumer bir zumda yaratib bo'lgan — ok, o'tkazamiz
+                continue
+
+            # do_command yuboramiz
+            one_liner = _build_terminal_one_liner(exec_.id, server_url)
+            ok = push_command_to_agent(computer, {
+                'type':    'do_command',
+                'action':  one_liner,
+                'message': '',
+                'payload': {
+                    'terminal_exec_id':  str(exec_.id),
+                    'scheduled_script':  str(script.id),
+                },
+            })
+            if ok:
+                dispatched += 1
+            else:
+                # WS mavjud emas — execution'ni pending holida qoldiramiz,
+                # keyingi connectda yana urinib ko'riladi? Yo'q — executed_date bilan
+                # bugunga bir marta cheklovi bor. Shuning uchun offline deb belgilaylik.
+                exec_.status = TerminalExecution.STATUS_FAILED
+                exec_.stderr = 'PC WS channel topilmadi (push_command_to_agent=False)'
+                exec_.save(update_fields=['status', 'stderr'])
+        except Exception as e:
+            print(f"[dispatch_scheduled.script={script.id} xato] {e}")
+            continue
+
+    # FIFO cleanup — 30 kundan eski yozuvlarni o'chirish (sekin, inline tashkil etilmagan).
+    # Har 100 ta dispatch'da bir marta tozalaymiz (DB'ni bo'g'maslik uchun).
+    if dispatched > 0:
+        try:
+            _maybe_cleanup_old_executions()
+        except Exception as e:
+            print(f"[cleanup xato] {e}")
+
+    return dispatched
+
+
+_cleanup_tick = {'n': 0}
+
+
+def _maybe_cleanup_old_executions():
+    """30 kundan eski TerminalExecution'larni o'chiradi (har 100 chaqirishda 1 marta)."""
+    from datetime import timedelta
+    from django.utils import timezone
+    from .models import TerminalExecution
+
+    _cleanup_tick['n'] += 1
+    if _cleanup_tick['n'] % 100 != 1:
+        return
+
+    cutoff = timezone.now() - timedelta(days=30)
+    deleted, _ = TerminalExecution.objects.filter(created_at__lt=cutoff).delete()
+    if deleted:
+        print(f"[FIFO cleanup] {deleted} ta eski TerminalExecution o'chirildi (>30 kun)")
+
+
+def dispatch_scheduled_script_now(script, requested_by=None, server_url=None):
+    """
+    Admin "Hozir ishga tushir" bosganda chaqiriladi — bugungi guardni tekshirmasdan,
+    applicable online PC'larga darhol yuboradi.
+
+    Qaytaradi: yuborilgan PC'lar soni.
+    """
+    from datetime import date
+    from .models import TerminalExecution
+
+    if not script.is_active:
+        return 0
+
+    server_url = server_url or _get_server_url_from_env()
+    today = date.today()
+    sent = 0
+
+    if script.target_mode == script.TARGET_ALL:
+        from endpoints.models import Computer
+        qs = Computer.objects.filter(is_online=True)
+    else:
+        qs = script.target_computers.filter(is_online=True)
+
+    for computer in qs:
+        # executed_date = None — chunki bu "force" (admin qo'lida), bir kuniga 1 marta
+        # cheklovi tegilmaydi. Audit sifatida yoziladi.
+        try:
+            exec_ = TerminalExecution.objects.create(
+                computer=computer,
+                scheduled_script=script,
+                executed_date=None,  # None = force run, unique constraint tegmaydi
+                requested_by=requested_by,
+                shell=script.shell,
+                command_text=script.command_text,
+                status=TerminalExecution.STATUS_PENDING,
+            )
+            one_liner = _build_terminal_one_liner(exec_.id, server_url)
+            ok = push_command_to_agent(computer, {
+                'type':    'do_command',
+                'action':  one_liner,
+                'message': '',
+                'payload': {'terminal_exec_id': str(exec_.id)},
+            })
+            if ok:
+                sent += 1
+        except Exception as e:
+            print(f"[dispatch_now.pc={computer.id} xato] {e}")
+
+    return sent
