@@ -320,7 +320,7 @@
                 <h5><i class="zmdi zmdi-time-restore"></i> Oxirgi buyruqlar</h5>
                 <div id="historyList">
                     {% for exec in recent_executions %}
-                    <div class="hist-row" data-cmd="{{ exec.command_text|escape }}" data-shell="{{ exec.shell }}">
+                    <div class="hist-row" data-cmd="{{ exec.command_text|escape }}" data-shell="{{ exec.shell }}" data-exec-id="{{ exec.id }}">
                         <div class="hist-cmd">
                             <span style="color: {% if exec.shell == 'powershell' %}#4fc3f7{% else %}#0f6{% endif %}">[{{ exec.shell }}]</span>
                             {{ exec.command_text|truncatechars:120 }}
@@ -399,22 +399,43 @@
 
     $btn.addEventListener('click', submitCommand);
 
-    // ─── History row'ga bosilsa — command textarea'ga nusxalanadi ──
-    document.querySelectorAll('.hist-row').forEach(row => {
+    // ─── History row'ga bosilsa — command input'ga qo'yiladi + output ko'rsatiladi ──
+    function attachHistoryClickHandler(row) {
         row.addEventListener('click', () => {
             const cmd = row.dataset.cmd;
             const sh = row.dataset.shell;
+            const eid = row.dataset.execId;
             $input.value = cmd;
-            // Shell tanlash
             document.querySelectorAll('.shell-tab').forEach(t => {
                 t.classList.toggle('active', t.dataset.shell === sh);
             });
             currentShell = sh;
             $input.classList.toggle('pwsh', sh === 'powershell');
             $btn.classList.toggle('pwsh', sh === 'powershell');
-            $input.focus();
+
+            // Agar exec_id bo'lsa — eski natijani qayta ko'rsatish uchun poll qilamiz
+            if (eid) {
+                $outputPanel.style.display = 'block';
+                showStatus('pending', 'Yuklanmoqda...');
+                $outputBody.innerHTML = '<span class="output-empty">Oldingi natija yuklanmoqda...</span>';
+                fetch(POLL_URL_BASE + eid + '/')
+                    .then(r => r.json())
+                    .then(pd => {
+                        showStatus(pd.status, formatMeta(pd));
+                        renderOutput(pd.stdout, pd.stderr);
+                        // Scroll output ga
+                        $outputPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    })
+                    .catch(() => {
+                        $outputBody.innerHTML = '<span class="stderr-line">Natijani olishda xato</span>';
+                    });
+            } else {
+                $input.focus();
+            }
         });
-    });
+    }
+
+    document.querySelectorAll('.hist-row').forEach(attachHistoryClickHandler);
 
     // ─── Copy output ──
     $copyBtn.addEventListener('click', () => {
@@ -487,8 +508,9 @@
                         clearInterval(pollTimer);
                         $btn.disabled = false;
                         $btn.innerHTML = '<i class="zmdi zmdi-play"></i> Yuborish';
-                        // Refresh the history list after 300ms so new entry appears
-                        setTimeout(() => { if (ticks > 1) location.reload(); }, 500);
+                        // Tarix ro'yxatiga yangi yozuv qo'shamiz (reload QILMAYMIZ —
+                        // aks holda hozirgi output yo'q bo'lib ketadi).
+                        prependHistoryRow(execId, pd);
                     }
                 })
                 .catch(err => {
@@ -548,6 +570,60 @@
 
     function escapeHtml(s) {
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // Yangi bajarilgan buyruqni history ro'yxatiga QO'SHAMIZ (reload QILMASDAN).
+    // Shu bilan hozirgi output ko'rinib turadi, foydalanuvchi uni tinch o'qiy oladi.
+    function prependHistoryRow(execId, pd) {
+        const cmdText = $input.value.trim() || '(bo\'sh)';
+        const shell = currentShell;
+        const now = new Date();
+        const timeStr = now.toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short' }) + ' '
+                      + now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+
+        const statusMap = {
+            done:    ['b-done', 'OK'],
+            failed:  ['b-failed', 'FAIL'],
+            timeout: ['b-timeout', 'TIMEOUT'],
+        };
+        const [cls, label] = statusMap[pd.status] || ['b-pending', pd.status];
+        const shellColor = shell === 'powershell' ? '#4fc3f7' : '#0f6';
+
+        let historyList = document.getElementById('historyList');
+
+        // Tarix bloki yo'q bo'lsa yaratamiz
+        if (!historyList) {
+            const termBody = document.querySelector('.term-body');
+            const histWrap = document.createElement('div');
+            histWrap.className = 'history';
+            histWrap.innerHTML = '<h5><i class="zmdi zmdi-time-restore"></i> Oxirgi buyruqlar</h5><div id="historyList"></div>';
+            termBody.appendChild(histWrap);
+            historyList = document.getElementById('historyList');
+        }
+
+        const row = document.createElement('div');
+        row.className = 'hist-row';
+        row.dataset.cmd = cmdText;
+        row.dataset.shell = shell;
+        row.dataset.execId = execId;
+        row.innerHTML = `
+            <div class="hist-cmd">
+                <span style="color: ${shellColor}">[${shell}]</span>
+                ${escapeHtml(cmdText.length > 120 ? cmdText.substring(0, 120) + '...' : cmdText)}
+            </div>
+            <div class="hist-meta">
+                <span class="output-badge ${cls}">${label}</span>
+                <span>${escapeHtml(timeStr)}</span>
+            </div>
+        `;
+        attachHistoryClickHandler(row);
+
+        historyList.insertBefore(row, historyList.firstChild);
+
+        // Faqat 30 qator saqlaymiz UIda — eskisi tushib ketadi
+        while (historyList.children.length > 30) {
+            historyList.removeChild(historyList.lastChild);
+        }
     }
 })();
 </script>
