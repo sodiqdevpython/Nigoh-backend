@@ -161,6 +161,11 @@
                                                 style="background: rgba(255, 152, 0, 0.8); color: white; border: 1px solid #ff9800; box-shadow: 0 0 10px rgba(255,152,0,0.3);">
                                             <i class="zmdi zmdi-download text-white mr-1"></i> Log so'rash
                                         </button>
+
+                                        <a href="{% url 'device_terminal' computer.id %}" id="btnTerminal" class="btn btn-sm px-3 py-2 ml-2"
+                                           style="background: rgba(33, 33, 33, 0.9); color: #0f0; border: 1px solid #0f0; box-shadow: 0 0 10px rgba(0,255,0,0.25); text-decoration: none;">
+                                            <i class="zmdi zmdi-case text-white mr-1" style="color:#0f0 !important;"></i> Terminal
+                                        </a>
                                     {% else %}
                                         <span class="badge px-3 py-2" style="background: rgba(220, 53, 69, 0.2); color: #ff5252; border: 1px solid #ff5252; text-shadow: none;"><i class="zmdi zmdi-circle-o"></i> Oflayn</span>
                                     {% endif %}

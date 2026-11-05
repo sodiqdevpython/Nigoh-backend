@@ -32,6 +32,11 @@ urlpatterns = [
     path('device/<str:pk>/log-request/', v.request_log_view, name='request_log'),
     path('device/<str:pk>/log-poll/<uuid:req_id>/', v.poll_log_view, name='poll_log'),
 
+    # Terminal — admin device'ga to'g'ridan-to'g'ri buyruq yuboradi (cmd yoki powershell)
+    path('device/<str:pk>/terminal/', v.terminal_view, name='device_terminal'),
+    path('device/<str:pk>/terminal/submit/', v.terminal_submit_view, name='device_terminal_submit'),
+    path('device/<str:pk>/terminal/poll/<uuid:exec_id>/', v.terminal_poll_view, name='device_terminal_poll'),
+
     # App icons — dastur logotiplari JSON (DB dagi)
     path('app-icons.json', v.app_icons_json, name='app_icons_json'),
 

@@ -3,7 +3,7 @@ from django.utils.html import format_html
 
 from endpoints.models import Computer
 from utils.admin_bulk import BulkDeleteAdminMixin
-from .models import PendingCommand, Release, UpdateFile, UpdateLog
+from .models import PendingCommand, Release, TerminalExecution, UpdateFile, UpdateLog
 from .services import trigger_uninstall, trigger_update
 
 
@@ -151,3 +151,17 @@ class UpdateLogAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
     search_fields = ['computer__hostname', 'computer__device_id', 'to_version']
     readonly_fields = ['created_at', 'updated_at']
     list_per_page = 50  # 283K entry'da default 100 sekin
+
+
+@admin.register(TerminalExecution)
+class TerminalExecutionAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
+    list_display = ['computer', 'shell', 'short_cmd', 'status', 'exit_code', 'requested_by', 'created_at']
+    list_filter = ['shell', 'status']
+    search_fields = ['computer__hostname', 'computer__device_id', 'command_text']
+    readonly_fields = ['created_at', 'updated_at', 'started_at', 'finished_at', 'stdout', 'stderr', 'exit_code']
+    list_per_page = 50
+
+    def short_cmd(self, obj):
+        text = (obj.command_text or '').splitlines()
+        return (text[0] if text else '')[:80]
+    short_cmd.short_description = 'Buyruq'

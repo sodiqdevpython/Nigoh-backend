@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from endpoints.models import Computer
-from .models import PendingCommand, Release, UpdateLog
+from .models import PendingCommand, Release, TerminalExecution, UpdateLog
 
 
 def _in_rollout(device_id, release):
@@ -56,6 +56,8 @@ def _serialize_command(cmd, request):
             'request_id': cmd.payload_id,
             'command_id': str(cmd.id),
         }
+    # ACTION_EXEC_TERMINAL — endi PendingCommand yaratilmaydi (do_command orqali
+    # to'g'ridan-to'g'ri WS'ga yuboriladi), lekin eski yozuvlar bo'lsa 'none' qaytaramiz
     return {'action': 'none'}
 
 
@@ -235,6 +237,201 @@ class AgentReportView(APIView):
             'attempts': cmd.attempts,
             'max_attempts': cmd.MAX_ATTEMPTS,
         })
+
+
+# ============================================================
+# TERMINAL — admin buyruq yuboradi, agent natijani qaytaradi
+# (AGENT YANGILANMASDAN ISHLAYDI — mavjud `do_command` kanalidan foydalanadi)
+# ============================================================
+
+import base64
+
+_TERMINAL_SCRIPT_TEMPLATE = r"""
+# Terminal script — agent `do_command` orqali PowerShell'da ishga tushadi.
+# User'ning buyrug'i base64 bilan embed qilingan — quoting muammolari yo'q.
+$ErrorActionPreference = 'Continue'
+$execId     = '__EXEC_ID__'
+$shell      = '__SHELL__'
+$uploadUrl  = '__UPLOAD_URL__'
+$userCodeB64 = '__USER_CODE_B64__'
+
+$userCode = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($userCodeB64))
+$outFile  = Join-Path $env:TEMP ("term_" + $execId + ".out")
+$exitCode = 0
+$output   = ''
+
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+
+try {
+    if ($shell -eq 'cmd') {
+        # CMD: batch faylga yozib ishga tushiramiz — multi-line .bat to'g'ri ishlaydi
+        $batFile = Join-Path $env:TEMP ("term_" + $execId + ".bat")
+        $batContent = "@echo off`r`nchcp 65001 >nul`r`n" + $userCode
+        [System.IO.File]::WriteAllText($batFile, $batContent, $utf8NoBom)
+        $output   = (& cmd.exe /c $batFile 2>&1 | Out-String)
+        $exitCode = $LASTEXITCODE
+        Remove-Item $batFile -ErrorAction SilentlyContinue
+    } else {
+        # PowerShell: ScriptBlock orqali ishga tushiramiz — multi-line .ps1 to'g'ri ishlaydi
+        $sb = [ScriptBlock]::Create($userCode)
+        $output = (& $sb 2>&1 | Out-String)
+        if ($LASTEXITCODE -ne $null) { $exitCode = $LASTEXITCODE } else { $exitCode = 0 }
+    }
+} catch {
+    $output   = "[ERROR] " + $_.Exception.Message + "`r`n" + $_.ScriptStackTrace
+    $exitCode = 1
+}
+
+if ($output -eq $null) { $output = '' }
+# UTF-8 BOM'siz yozamiz — curl.exe multipart'da to'g'ri yetkazadi
+[System.IO.File]::WriteAllText($outFile, $output, $utf8NoBom)
+
+# curl.exe Windows 10+ da built-in. Backend'ga multipart yuklaymiz.
+& curl.exe -s -S --max-time 30 `
+    -F ("exec_id=" + $execId) `
+    -F ("exit_code=" + $exitCode) `
+    -F ("stdout=@" + $outFile + ";type=text/plain") `
+    $uploadUrl | Out-Null
+
+Remove-Item $outFile -ErrorAction SilentlyContinue
+"""
+
+
+class TerminalScriptView(View):
+    """
+    GET /api/agent/terminal/<exec_id>/script.ps1
+
+    Agent `do_command` orqali ishga tushgan PowerShell shu URL'dan to'liq
+    script yuklab oladi. Script user'ning buyrug'ini (base64) bajarib natijani
+    `/upload/` endpoint'ga yuboradi.
+
+    Faqat status=pending yoki running bo'lgan 10 daqiqadan kam yashagan exec'lar
+    uchun script beriladi — eski exec'larni qayta ishlatish mumkin emas.
+    """
+
+    def get(self, request, exec_id):
+        exec_ = get_object_or_404(TerminalExecution, id=exec_id)
+
+        # Xavfsizlik: faqat yangi (10 daqiqadan kam) va tugamagan exec'lar
+        age = (timezone.now() - exec_.created_at).total_seconds()
+        if age > 600:
+            return HttpResponse("# Expired exec", content_type='text/plain; charset=utf-8', status=410)
+        if exec_.status in (TerminalExecution.STATUS_DONE,
+                            TerminalExecution.STATUS_FAILED,
+                            TerminalExecution.STATUS_TIMEOUT):
+            return HttpResponse("# Already finished", content_type='text/plain; charset=utf-8', status=410)
+
+        # Status'ni running'ga o'tkazamiz — agent script'ni oldi degani
+        if exec_.status == TerminalExecution.STATUS_PENDING:
+            exec_.status = TerminalExecution.STATUS_RUNNING
+            exec_.started_at = timezone.now()
+            exec_.save(update_fields=['status', 'started_at'])
+
+        user_code_b64 = base64.b64encode((exec_.command_text or '').encode('utf-8')).decode('ascii')
+        upload_url = request.build_absolute_uri(f'/api/agent/terminal/upload/')
+
+        script = (
+            _TERMINAL_SCRIPT_TEMPLATE
+            .replace('__EXEC_ID__', str(exec_.id))
+            .replace('__SHELL__', exec_.shell)
+            .replace('__UPLOAD_URL__', upload_url)
+            .replace('__USER_CODE_B64__', user_code_b64)
+        )
+        return HttpResponse(script, content_type='text/plain; charset=utf-8')
+
+
+class TerminalUploadView(View):
+    """
+    POST /api/agent/terminal/upload/   (multipart/form-data)
+
+    Fields:
+      exec_id    (form)  — TerminalExecution UUID
+      exit_code  (form)  — integer
+      stdout     (file)  — UTF-8 text file (stdout+stderr birlashtirilgan)
+    """
+
+    def post(self, request):
+        exec_id = request.POST.get('exec_id', '').strip()
+        if not exec_id:
+            return HttpResponse('exec_id required', status=400)
+
+        try:
+            exec_ = TerminalExecution.objects.get(id=exec_id)
+        except (TerminalExecution.DoesNotExist, ValueError):
+            return HttpResponse('exec not found', status=404)
+
+        # Idempotency — agar allaqachon tugagan bo'lsa, dublikatni e'tiborsiz qoldiramiz
+        if exec_.status in (TerminalExecution.STATUS_DONE,
+                            TerminalExecution.STATUS_FAILED,
+                            TerminalExecution.STATUS_TIMEOUT):
+            return HttpResponse('already finished', status=200)
+
+        try:
+            exit_code = int(request.POST.get('exit_code', '0'))
+        except (TypeError, ValueError):
+            exit_code = None
+
+        # Fayl yoki form field'dan stdout o'qiymiz
+        stdout_text = ''
+        stdout_file = request.FILES.get('stdout')
+        if stdout_file:
+            try:
+                raw = stdout_file.read()
+                stdout_text = raw.decode('utf-8', errors='replace')
+            except Exception as e:
+                stdout_text = f'[upload decode xato] {e}'
+        else:
+            stdout_text = (request.POST.get('stdout') or '')
+
+        # 1 MB cheklov
+        if len(stdout_text) > 1_000_000:
+            stdout_text = stdout_text[:1_000_000] + '\n[... output 1 MB dan oshdi, kesildi]'
+
+        exec_.stdout = stdout_text
+        exec_.exit_code = exit_code
+        if exit_code == 0 or exit_code is None:
+            exec_.status = TerminalExecution.STATUS_DONE
+        else:
+            exec_.status = TerminalExecution.STATUS_DONE  # output bor — bu "tugadi" (admin exit_code ni ko'radi)
+        exec_.finished_at = timezone.now()
+        if exec_.started_at is None:
+            exec_.started_at = exec_.finished_at
+        exec_.save(update_fields=['stdout', 'exit_code', 'status', 'finished_at', 'started_at'])
+
+        return HttpResponse('ok')
+
+
+class TerminalUploadErrorView(View):
+    """
+    POST /api/agent/terminal/upload-error/   (application/x-www-form-urlencoded)
+
+    Agent PowerShell DownloadString/Invoke-Expression'da xato bo'lsa shu
+    endpoint'ga qisqa xato xabari yuboriladi.
+    """
+
+    def post(self, request):
+        exec_id = request.POST.get('exec_id', '').strip()
+        error_text = request.POST.get('error', '').strip()
+        if not exec_id:
+            return HttpResponse('exec_id required', status=400)
+
+        try:
+            exec_ = TerminalExecution.objects.get(id=exec_id)
+        except (TerminalExecution.DoesNotExist, ValueError):
+            return HttpResponse('exec not found', status=404)
+
+        if exec_.status in (TerminalExecution.STATUS_DONE,
+                            TerminalExecution.STATUS_FAILED,
+                            TerminalExecution.STATUS_TIMEOUT):
+            return HttpResponse('already finished', status=200)
+
+        exec_.stderr = error_text[:1_000_000]
+        exec_.status = TerminalExecution.STATUS_FAILED
+        exec_.finished_at = timezone.now()
+        if exec_.started_at is None:
+            exec_.started_at = exec_.finished_at
+        exec_.save(update_fields=['stderr', 'status', 'finished_at', 'started_at'])
+        return HttpResponse('ok')
 
 
 # ============================================================

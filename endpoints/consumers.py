@@ -276,6 +276,7 @@ class ComputerConsumer(AsyncWebsocketConsumer):
             field, value = self._id_filter()
             row = await pool.fetchrow(
                 f'''SELECT pc.id, pc.action, pc.force, pc.release_id, pc.attempts,
+                              pc.payload_id,
                               r.target, r.version
                        FROM commands_pendingcommand pc
                   LEFT JOIN commands_release r ON pc.release_id = r.id
@@ -293,6 +294,7 @@ class ComputerConsumer(AsyncWebsocketConsumer):
             cmd_id     = row['id']
             action     = row['action']
             attempts   = row['attempts'] or 0
+            payload_id = row['payload_id'] or ''
 
             if action == 'update' and row['target'] and row['version']:
                 payload = {

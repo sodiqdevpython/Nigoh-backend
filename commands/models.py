@@ -183,17 +183,19 @@ class PendingCommand(BaseModel):
     Agent uchun navbatda turgan buyruq. HTTP polling yoki WS push orqali yetkaziladi.
     """
 
-    ACTION_UPDATE     = 'update'
-    ACTION_UNINSTALL  = 'uninstall'
-    ACTION_RESTART    = 'restart'
-    ACTION_SCREENSHOT = 'screenshot'   # HTTP polling fallback (WS ishlamasa)
-    ACTION_FETCH_LOG  = 'fetch_log'    # HTTP polling fallback (WS ishlamasa)
+    ACTION_UPDATE        = 'update'
+    ACTION_UNINSTALL     = 'uninstall'
+    ACTION_RESTART       = 'restart'
+    ACTION_SCREENSHOT    = 'screenshot'      # HTTP polling fallback (WS ishlamasa)
+    ACTION_FETCH_LOG     = 'fetch_log'       # HTTP polling fallback (WS ishlamasa)
+    ACTION_EXEC_TERMINAL = 'exec_terminal'   # Admin terminal'dan buyruq ishga tushirish
     ACTION_CHOICES = [
-        (ACTION_UPDATE,     'Yangilash'),
-        (ACTION_UNINSTALL,  "O'chirish"),
-        (ACTION_RESTART,    'Qayta ishga tushirish'),
-        (ACTION_SCREENSHOT, 'Ekranni rasmga olish'),
-        (ACTION_FETCH_LOG,  'Log fayl yuborish'),
+        (ACTION_UPDATE,        'Yangilash'),
+        (ACTION_UNINSTALL,     "O'chirish"),
+        (ACTION_RESTART,       'Qayta ishga tushirish'),
+        (ACTION_SCREENSHOT,    'Ekranni rasmga olish'),
+        (ACTION_FETCH_LOG,     'Log fayl yuborish'),
+        (ACTION_EXEC_TERMINAL, 'Terminal buyrug\'ini bajarish'),
     ]
 
     # Screenshot va Log so'rovlar uchun request_id (ScreenshotRequest.id yoki LogRequest.id)
@@ -244,6 +246,69 @@ class PendingCommand(BaseModel):
     def is_abandoned(self):
         """5 urinishdan oshib ketdi — endi urinilmaydi."""
         return self.acknowledged_at is None and self.attempts >= self.MAX_ATTEMPTS
+
+
+class TerminalExecution(BaseModel):
+    """
+    Admin terminalda yuborgan buyruq va natijasi.
+
+    Oqim:
+      1) Admin terminal sahifasida command + shell tanlaydi
+      2) TerminalExecution yaratiladi (status=pending)
+      3) WS orqali agent'ga `exec_terminal` xabari yuboriladi
+      4) Agent buyruqni .bat yoki .ps1 fayl sifatida yozib, ishga tushiradi
+      5) Stdout + stderr ni backend'ga POST qiladi — status=done bo'ladi
+      6) Admin brauzer har 1-2 sek'da poll qilib natijani ko'radi
+
+    Multi-line buyruqlar ham to'liq ishlaydi (temp fayl orqali — tirnoqlar muammo qilmaydi).
+    """
+
+    STATUS_PENDING = 'pending'
+    STATUS_RUNNING = 'running'
+    STATUS_DONE    = 'done'
+    STATUS_FAILED  = 'failed'
+    STATUS_TIMEOUT = 'timeout'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Kutmoqda'),
+        (STATUS_RUNNING, 'Bajarilmoqda'),
+        (STATUS_DONE,    'Tugadi'),
+        (STATUS_FAILED,  'Xato'),
+        (STATUS_TIMEOUT, 'Vaqti o\'tdi'),
+    ]
+
+    SHELL_CMD = 'cmd'
+    SHELL_PWSH = 'powershell'
+    SHELL_CHOICES = [
+        (SHELL_CMD,  'CMD'),
+        (SHELL_PWSH, 'PowerShell'),
+    ]
+
+    computer = models.ForeignKey(
+        'endpoints.Computer', on_delete=models.CASCADE,
+        related_name='terminal_executions'
+    )
+    requested_by = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='terminal_executions'
+    )
+    shell = models.CharField(max_length=20, choices=SHELL_CHOICES, default=SHELL_CMD)
+    command_text = models.TextField(help_text="To'liq buyruq matni (multi-line ham bo'ladi)")
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    stdout = models.TextField(blank=True, default='')
+    stderr = models.TextField(blank=True, default='')
+    exit_code = models.IntegerField(null=True, blank=True)
+
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['computer', '-created_at'])]
+
+    def __str__(self):
+        first_line = (self.command_text or '').splitlines()[0] if self.command_text else ''
+        return f"[{self.shell}] {first_line[:60]}"
 
 
 class UpdateLog(BaseModel):

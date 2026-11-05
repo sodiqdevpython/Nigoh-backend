@@ -80,3 +80,58 @@ def trigger_restart(computer):
         'command_id': str(cmd.id),
     })
     return cmd
+
+
+def trigger_exec_terminal(computer, command_text, shell='cmd', requested_by=None, server_url=''):
+    """
+    Admin terminalda yuborgan buyruqni agentga uzatadi.
+
+    AGENTNI YANGILASHGA HOJAT YO'Q — mavjud `do_command` kanalidan foydalaniladi.
+
+    Oqim:
+      1) TerminalExecution yaratiladi (buyruq matni DB'ga saqlanadi)
+      2) Backend'ga `/api/agent/terminal/<id>/script.ps1` endpointidan to'liq
+         PowerShell script olinadigan BIR QATOR buyruq WS orqali agentga yuboriladi
+      3) Agent mavjud `do_command` handler orqali PowerShell'ni ishga tushiradi
+      4) Script backend'dan yuklanib bajariladi — natijani multipart orqali
+         `/api/agent/terminal/upload/` ga yuboradi
+      5) TerminalExecution.status=done bo'ladi, admin uni ko'radi
+
+    Multi-line va uzun buyruqlar to'liq ishlaydi — script ichida base64 decode qilinadi,
+    quoting muammolari yo'q.
+    """
+    from .models import TerminalExecution
+
+    if shell not in (TerminalExecution.SHELL_CMD, TerminalExecution.SHELL_PWSH):
+        shell = TerminalExecution.SHELL_CMD
+
+    exec_ = TerminalExecution.objects.create(
+        computer=computer,
+        requested_by=requested_by,
+        shell=shell,
+        command_text=command_text or '',
+        status=TerminalExecution.STATUS_PENDING,
+    )
+
+    script_url = f'{server_url.rstrip("/")}/api/agent/terminal/{exec_.id}/script.ps1'
+
+    # PowerShell bir-qatorli — agent uni `do_command` orqali ijro qiladi:
+    #   `powershell -Command "${this}"` → ichida DownloadString+iex ishlaydi
+    # Backend qaytargan script ichida userning command'i va upload URL bor.
+    one_liner = (
+        "try{"
+        "[System.Net.ServicePointManager]::SecurityProtocol=[System.Net.SecurityProtocolType]::Tls12;"
+        f"(New-Object Net.WebClient).DownloadString('{script_url}') | Invoke-Expression"
+        "}catch{"
+        f"(New-Object Net.WebClient).UploadString('{server_url.rstrip('/')}/api/agent/terminal/upload-error/','exec_id={exec_.id}&error='+[System.Uri]::EscapeDataString($_.Exception.Message))"
+        "}"
+    )
+
+    push_command_to_agent(computer, {
+        'type':    'do_command',
+        'action':  one_liner,
+        'message': '',
+        'payload': {'terminal_exec_id': str(exec_.id)},
+    })
+
+    return exec_

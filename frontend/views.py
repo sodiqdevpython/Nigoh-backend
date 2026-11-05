@@ -24,7 +24,8 @@ from tracking.models import (
     ScreenshotRequest, BroadcastSession, AppIcon, LogRequest
 )
 from endpoints.consumers import LIVE_METRICS
-from commands.models import PendingCommand
+from commands.models import PendingCommand, TerminalExecution
+from commands.services import trigger_exec_terminal
 import json
 import re
 import hashlib
@@ -1553,3 +1554,89 @@ def app_icons_json(request):
     resp = JsonResponse({'icons': icons})
     resp['Cache-Control'] = 'public, max-age=60'
     return resp
+
+
+# ============================================================
+# TERMINAL — admin device detail sahifasidan buyruq yuboradi, agent natijani qaytaradi
+# ============================================================
+
+@login_required
+@ensure_csrf_cookie
+def terminal_view(request, pk):
+    """GET /device/<pk>/terminal/  →  terminal sahifasi (textarea + shell + output)."""
+    computer = get_object_or_404(Computer, id=pk)
+    # Oxirgi 30 ta buyruq (natija ko'rish uchun)
+    recent = computer.terminal_executions.all()[:30]
+    context = {
+        'computer': computer,
+        'recent_executions': recent,
+    }
+    return render(request, 'menu/device/terminal.html', context)
+
+
+@staff_required
+def terminal_submit_view(request, pk):
+    """
+    POST /device/<pk>/terminal/submit/
+    Body JSON: {command: str, shell: 'cmd'|'powershell'}
+    Qaytaradi: {exec_id, status}
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    computer = get_object_or_404(Computer, id=pk)
+    if computer.is_whitelisted and not request.user.is_superuser:
+        return JsonResponse({'error': 'Bu qurilma bloklangan'}, status=403)
+    if not computer.is_online:
+        return JsonResponse({'error': 'Bu PC oflayn'}, status=400)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    command = (data.get('command') or '').strip()
+    shell   = (data.get('shell') or 'cmd').strip().lower()
+
+    if not command:
+        return JsonResponse({'error': "Buyruq bo'sh"}, status=400)
+    if len(command) > 100_000:
+        return JsonResponse({'error': "Buyruq juda uzun (>100KB)"}, status=400)
+    if shell not in ('cmd', 'powershell'):
+        shell = 'cmd'
+
+    # Backend URL — agent shu URL'dan PowerShell script yuklab oladi
+    server_url = request.build_absolute_uri('/').rstrip('/')
+
+    exec_ = trigger_exec_terminal(
+        computer=computer,
+        command_text=command,
+        shell=shell,
+        requested_by=request.user,
+        server_url=server_url,
+    )
+
+    return JsonResponse({
+        'ok': True,
+        'exec_id': str(exec_.id),
+        'status': exec_.status,
+    })
+
+
+@login_required
+def terminal_poll_view(request, pk, exec_id):
+    """
+    GET /device/<pk>/terminal/poll/<exec_id>/
+    Admin brauzeri har 1 sek'da so'raydi — natija kelganmi.
+    """
+    exec_ = get_object_or_404(TerminalExecution, id=exec_id, computer_id=pk)
+    return JsonResponse({
+        'exec_id':     str(exec_.id),
+        'status':      exec_.status,
+        'shell':       exec_.shell,
+        'stdout':      exec_.stdout,
+        'stderr':      exec_.stderr,
+        'exit_code':   exec_.exit_code,
+        'started_at':  exec_.started_at.isoformat() if exec_.started_at else None,
+        'finished_at': exec_.finished_at.isoformat() if exec_.finished_at else None,
+    })

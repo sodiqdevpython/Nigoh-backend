@@ -1,0 +1,555 @@
+{% extends 'base/base.html' %}
+{% block content %}
+
+<style>
+.term-wrap {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+    color: #e6e6e6;
+}
+.term-card {
+    background: rgba(10, 10, 15, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.term-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0,0,0,0.4);
+}
+.term-header h4 {
+    margin: 0;
+    color: #fff;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.term-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #28c841;
+    box-shadow: 0 0 8px #28c841;
+}
+.term-dot.off { background: #ff5252; box-shadow: 0 0 8px #ff5252; }
+.term-body {
+    padding: 18px 20px;
+}
+
+/* Shell tanlash */
+.shell-tabs {
+    display: inline-flex;
+    gap: 2px;
+    margin-bottom: 12px;
+    background: rgba(0,0,0,0.4);
+    padding: 3px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.shell-tab {
+    padding: 7px 18px;
+    font-size: 13px;
+    color: #aaa;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: 0.15s;
+    user-select: none;
+    font-family: 'Consolas', monospace;
+}
+.shell-tab:hover { color: #fff; }
+.shell-tab.active {
+    background: #0f6;
+    color: #000;
+    font-weight: 600;
+}
+.shell-tab.active.pwsh {
+    background: #0288d1;
+    color: #fff;
+}
+
+/* Textarea — monospace terminal look */
+.cmd-input-wrap { position: relative; }
+.cmd-input {
+    width: 100%;
+    min-height: 140px;
+    max-height: 400px;
+    padding: 14px 16px;
+    font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #e6e6e6;
+    background: #0d0d12;
+    border: 1px solid rgba(0,255,100,0.3);
+    border-radius: 6px;
+    resize: vertical;
+    outline: none;
+    box-shadow: inset 0 0 20px rgba(0,255,100,0.05);
+    tab-size: 4;
+}
+.cmd-input:focus {
+    border-color: #0f6;
+    box-shadow: inset 0 0 20px rgba(0,255,100,0.1), 0 0 0 2px rgba(0,255,100,0.15);
+}
+.cmd-input.pwsh {
+    border-color: rgba(2,136,209,0.4);
+    box-shadow: inset 0 0 20px rgba(2,136,209,0.05);
+}
+.cmd-input.pwsh:focus {
+    border-color: #0288d1;
+    box-shadow: inset 0 0 20px rgba(2,136,209,0.1), 0 0 0 2px rgba(2,136,209,0.2);
+}
+
+.hint-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #888;
+}
+.hint-bar kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 3px;
+    color: #ccc;
+    font-family: inherit;
+}
+.btn-run {
+    background: #0f6;
+    color: #000;
+    font-weight: 600;
+    padding: 8px 22px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: 0.15s;
+    font-family: 'Consolas', monospace;
+}
+.btn-run:hover:not(:disabled) { background: #0f8; }
+.btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-run.pwsh { background: #0288d1; color: #fff; }
+.btn-run.pwsh:hover:not(:disabled) { background: #03a9f4; }
+
+/* Output panel */
+.output-panel {
+    margin-top: 18px;
+    background: #050508;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.output-head {
+    padding: 8px 14px;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 12px;
+    color: #888;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.output-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.b-pending { background: rgba(255,152,0,0.2); color: #ffb74d; }
+.b-running { background: rgba(33,150,243,0.2); color: #64b5f6; }
+.b-done { background: rgba(76,175,80,0.2); color: #81c784; }
+.b-failed { background: rgba(244,67,54,0.2); color: #ef5350; }
+.b-timeout { background: rgba(156,39,176,0.2); color: #ba68c8; }
+
+.output-body {
+    padding: 14px 16px;
+    font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #ccc;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 55vh;
+    overflow-y: auto;
+}
+.output-body .stderr-line { color: #ff6b6b; }
+.output-empty {
+    color: #555;
+    font-style: italic;
+    padding: 14px 16px;
+}
+
+/* History */
+.history {
+    margin-top: 28px;
+}
+.history h5 { color: #bbb; font-size: 14px; margin-bottom: 12px; font-weight: 500; }
+.hist-row {
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 5px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: 0.1s;
+}
+.hist-row:hover { background: rgba(255,255,255,0.05); }
+.hist-cmd {
+    font-family: 'Consolas', monospace;
+    font-size: 12px;
+    color: #ddd;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    margin-right: 10px;
+}
+.hist-meta {
+    font-size: 11px;
+    color: #888;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.offline-warning {
+    padding: 14px 18px;
+    background: rgba(244,67,54,0.1);
+    border: 1px solid rgba(244,67,54,0.3);
+    border-radius: 6px;
+    color: #ef9a9a;
+    margin-bottom: 20px;
+}
+
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    color: #999;
+    text-decoration: none;
+    font-size: 13px;
+    margin-bottom: 15px;
+    gap: 6px;
+}
+.back-link:hover { color: #fff; text-decoration: none; }
+</style>
+
+<div class="term-wrap">
+    <a href="{% url 'device_detail' computer.id %}" class="back-link">
+        <i class="zmdi zmdi-arrow-left"></i> Device detail'ga qaytish
+    </a>
+
+    <div class="term-card">
+        <div class="term-header">
+            <h4>
+                <span class="term-dot {% if not computer.is_online %}off{% endif %}"></span>
+                <i class="zmdi zmdi-case" style="color: #0f6;"></i>
+                Terminal — {{ computer.hostname|default:"Noma'lum" }}
+            </h4>
+            <div style="font-size: 12px; color: #888;">
+                Device ID: <span class="text-monospace">{{ computer.device_id|default:computer.bios_uuid|truncatechars:20 }}</span>
+            </div>
+        </div>
+
+        <div class="term-body">
+            {% if not computer.is_online %}
+            <div class="offline-warning">
+                <i class="zmdi zmdi-alert-circle-o"></i>
+                Bu PC hozir oflayn — buyruq yuborib bo'lmaydi. PC onlayn bo'lgach qayta urining.
+            </div>
+            {% endif %}
+
+            <div class="shell-tabs" id="shellTabs">
+                <div class="shell-tab active" data-shell="cmd">CMD</div>
+                <div class="shell-tab pwsh" data-shell="powershell">PowerShell</div>
+            </div>
+
+            <div class="cmd-input-wrap">
+                <textarea
+                    id="cmdInput"
+                    class="cmd-input"
+                    placeholder="Buyruq kiriting... (masalan: dir C:\ yoki Get-Process)&#10;&#10;Multi-line ham yozish mumkin — har qator alohida buyruq sifatida bajariladi."
+                    spellcheck="false"
+                    autofocus
+                ></textarea>
+            </div>
+
+            <div class="hint-bar">
+                <div>
+                    <kbd>Enter</kbd> — yuborish &nbsp;·&nbsp;
+                    <kbd>Shift</kbd>+<kbd>Enter</kbd> — yangi qator &nbsp;·&nbsp;
+                    <kbd>Ctrl</kbd>+<kbd>↑</kbd> — oldingi buyruq
+                </div>
+                <button id="btnRun" class="btn-run" {% if not computer.is_online %}disabled{% endif %}>
+                    <i class="zmdi zmdi-play"></i> Yuborish
+                </button>
+            </div>
+
+            <!-- Output panel -->
+            <div class="output-panel" id="outputPanel" style="display:none;">
+                <div class="output-head">
+                    <div>
+                        <span class="output-badge" id="outputBadge">—</span>
+                        <span id="outputMeta" style="margin-left: 10px;"></span>
+                    </div>
+                    <div>
+                        <button id="btnCopy" style="background:none; border:1px solid rgba(255,255,255,0.15); color:#aaa; padding:3px 10px; font-size:11px; border-radius:3px; cursor:pointer;">
+                            <i class="zmdi zmdi-copy"></i> Nusxalash
+                        </button>
+                    </div>
+                </div>
+                <div class="output-body" id="outputBody">
+                    <span class="output-empty">Natija kutilmoqda...</span>
+                </div>
+            </div>
+
+            <!-- History -->
+            {% if recent_executions %}
+            <div class="history">
+                <h5><i class="zmdi zmdi-time-restore"></i> Oxirgi buyruqlar</h5>
+                <div id="historyList">
+                    {% for exec in recent_executions %}
+                    <div class="hist-row" data-cmd="{{ exec.command_text|escape }}" data-shell="{{ exec.shell }}">
+                        <div class="hist-cmd">
+                            <span style="color: {% if exec.shell == 'powershell' %}#4fc3f7{% else %}#0f6{% endif %}">[{{ exec.shell }}]</span>
+                            {{ exec.command_text|truncatechars:120 }}
+                        </div>
+                        <div class="hist-meta">
+                            {% if exec.status == 'done' %}
+                                <span class="output-badge b-done">OK</span>
+                            {% elif exec.status == 'failed' %}
+                                <span class="output-badge b-failed">FAIL</span>
+                            {% elif exec.status == 'timeout' %}
+                                <span class="output-badge b-timeout">TIMEOUT</span>
+                            {% elif exec.status == 'running' %}
+                                <span class="output-badge b-running">RUN</span>
+                            {% else %}
+                                <span class="output-badge b-pending">⏳</span>
+                            {% endif %}
+                            <span>{{ exec.created_at|date:"d M H:i" }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% csrf_token %}
+<script>
+(function() {
+    const SUBMIT_URL = "{% url 'device_terminal_submit' computer.id %}";
+    const POLL_URL_BASE = "/device/{{ computer.id }}/terminal/poll/";
+    const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    const $input = document.getElementById('cmdInput');
+    const $btn = document.getElementById('btnRun');
+    const $tabs = document.getElementById('shellTabs');
+    const $outputPanel = document.getElementById('outputPanel');
+    const $outputBody = document.getElementById('outputBody');
+    const $outputBadge = document.getElementById('outputBadge');
+    const $outputMeta = document.getElementById('outputMeta');
+    const $copyBtn = document.getElementById('btnCopy');
+
+    let currentShell = 'cmd';
+    let pollTimer = null;
+    let historyIndex = -1;
+    const historyLocal = JSON.parse(localStorage.getItem('terminal_history_{{ computer.id }}') || '[]');
+
+    // ─── Shell switch ──────────────────────────────────────────
+    $tabs.addEventListener('click', e => {
+        const tab = e.target.closest('.shell-tab');
+        if (!tab) return;
+        document.querySelectorAll('.shell-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentShell = tab.dataset.shell;
+        $input.classList.toggle('pwsh', currentShell === 'powershell');
+        $btn.classList.toggle('pwsh', currentShell === 'powershell');
+    });
+
+    // ─── Enter yuborish, Shift+Enter yangi qator, Ctrl+↑/↓ history ──
+    $input.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            submitCommand();
+        } else if (e.ctrlKey && e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (historyLocal.length === 0) return;
+            historyIndex = Math.min(historyLocal.length - 1, historyIndex + 1);
+            $input.value = historyLocal[historyLocal.length - 1 - historyIndex] || '';
+        } else if (e.ctrlKey && e.key === 'ArrowDown') {
+            e.preventDefault();
+            historyIndex = Math.max(-1, historyIndex - 1);
+            $input.value = historyIndex === -1 ? '' : (historyLocal[historyLocal.length - 1 - historyIndex] || '');
+        }
+    });
+
+    $btn.addEventListener('click', submitCommand);
+
+    // ─── History row'ga bosilsa — command textarea'ga nusxalanadi ──
+    document.querySelectorAll('.hist-row').forEach(row => {
+        row.addEventListener('click', () => {
+            const cmd = row.dataset.cmd;
+            const sh = row.dataset.shell;
+            $input.value = cmd;
+            // Shell tanlash
+            document.querySelectorAll('.shell-tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.shell === sh);
+            });
+            currentShell = sh;
+            $input.classList.toggle('pwsh', sh === 'powershell');
+            $btn.classList.toggle('pwsh', sh === 'powershell');
+            $input.focus();
+        });
+    });
+
+    // ─── Copy output ──
+    $copyBtn.addEventListener('click', () => {
+        const txt = $outputBody.innerText;
+        navigator.clipboard.writeText(txt).then(() => {
+            const orig = $copyBtn.innerHTML;
+            $copyBtn.innerHTML = '<i class="zmdi zmdi-check"></i> Nusxalandi';
+            setTimeout(() => $copyBtn.innerHTML = orig, 1500);
+        });
+    });
+
+    function submitCommand() {
+        const cmd = $input.value.trim();
+        if (!cmd) return;
+        {% if not computer.is_online %}
+        showError("PC oflayn — buyruq yuborilmadi");
+        return;
+        {% endif %}
+
+        // Local history'ga qo'shish (max 50 ta)
+        if (historyLocal[historyLocal.length - 1] !== cmd) {
+            historyLocal.push(cmd);
+            if (historyLocal.length > 50) historyLocal.shift();
+            localStorage.setItem('terminal_history_{{ computer.id }}', JSON.stringify(historyLocal));
+        }
+        historyIndex = -1;
+
+        $btn.disabled = true;
+        $btn.innerHTML = '<i class="zmdi zmdi-time"></i> Yuborilyapti...';
+        $outputPanel.style.display = 'block';
+        showStatus('pending', 'Yuborilmoqda...');
+        $outputBody.innerHTML = '<span class="output-empty">Agent buyruqni oladi va bajaradi...</span>';
+
+        fetch(SUBMIT_URL, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: cmd, shell: currentShell })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                showError(data.error);
+                return;
+            }
+            pollUntilDone(data.exec_id);
+        })
+        .catch(err => {
+            showError(err.message || 'Tarmoq xatosi');
+        });
+    }
+
+    function pollUntilDone(execId) {
+        if (pollTimer) clearInterval(pollTimer);
+        let ticks = 0;
+        pollTimer = setInterval(() => {
+            ticks++;
+            if (ticks > 120) {    // 120 sek × 1 sek = 2 daqiqa max polling
+                clearInterval(pollTimer);
+                showStatus('timeout', '2 daqiqa javob yo\'q');
+                $btn.disabled = false;
+                $btn.innerHTML = '<i class="zmdi zmdi-play"></i> Yuborish';
+                return;
+            }
+            fetch(POLL_URL_BASE + execId + '/')
+                .then(r => r.json())
+                .then(pd => {
+                    showStatus(pd.status, formatMeta(pd));
+                    renderOutput(pd.stdout, pd.stderr);
+                    if (['done', 'failed', 'timeout'].includes(pd.status)) {
+                        clearInterval(pollTimer);
+                        $btn.disabled = false;
+                        $btn.innerHTML = '<i class="zmdi zmdi-play"></i> Yuborish';
+                        // Refresh the history list after 300ms so new entry appears
+                        setTimeout(() => { if (ticks > 1) location.reload(); }, 500);
+                    }
+                })
+                .catch(err => {
+                    console.error('Poll xato:', err);
+                });
+        }, 1000);
+    }
+
+    function renderOutput(stdout, stderr) {
+        const hasOut = stdout && stdout.length > 0;
+        const hasErr = stderr && stderr.length > 0;
+        if (!hasOut && !hasErr) {
+            $outputBody.innerHTML = '<span class="output-empty">(bo\'sh natija)</span>';
+            return;
+        }
+        let html = '';
+        if (hasOut) {
+            html += escapeHtml(stdout);
+        }
+        if (hasErr) {
+            if (hasOut) html += '\n\n';
+            html += '<span class="stderr-line">' + escapeHtml(stderr) + '</span>';
+        }
+        $outputBody.innerHTML = html;
+        // Scroll to bottom
+        $outputBody.scrollTop = $outputBody.scrollHeight;
+    }
+
+    function showStatus(status, meta) {
+        const map = {
+            pending: ['b-pending', 'Kutmoqda'],
+            running: ['b-running', 'Bajarilmoqda'],
+            done:    ['b-done', 'Tugadi'],
+            failed:  ['b-failed', 'Xato'],
+            timeout: ['b-timeout', 'Timeout'],
+        };
+        const [cls, label] = map[status] || ['b-pending', status];
+        $outputBadge.className = 'output-badge ' + cls;
+        $outputBadge.innerText = label;
+        $outputMeta.innerText = meta || '';
+    }
+
+    function formatMeta(pd) {
+        const parts = [];
+        if (pd.exit_code !== null && pd.exit_code !== undefined) parts.push('exit ' + pd.exit_code);
+        if (pd.shell) parts.push(pd.shell);
+        return parts.join(' · ');
+    }
+
+    function showError(msg) {
+        $outputPanel.style.display = 'block';
+        showStatus('failed', '');
+        $outputBody.innerHTML = '<span class="stderr-line">' + escapeHtml(msg) + '</span>';
+        $btn.disabled = false;
+        $btn.innerHTML = '<i class="zmdi zmdi-play"></i> Yuborish';
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+})();
+</script>
+
+{% endblock %}
