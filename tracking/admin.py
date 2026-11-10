@@ -171,7 +171,7 @@ def get_secure_token():
     return hashlib.sha256(raw_string.encode()).hexdigest()
 
 @admin.register(ScreenShareSession)
-class ScreenShareSessionAdmin(admin.ModelAdmin):
+class ScreenShareSessionAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
     list_display = ('computer', 'status', 'stream_link', 'requested_duration', 'created_at')
     # list_filter = ('status', 'created_at')
     search_fields = ('computer__hostname', 'computer__bios_uuid', 'stream_url')
@@ -259,7 +259,7 @@ class BroadcastComputerAdmin(admin.ModelAdmin):
 
 
 @admin.register(RemoteControlSession)
-class RemoteControlSessionAdmin(admin.ModelAdmin):
+class RemoteControlSessionAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
     list_display = ('computer', 'author', 'is_active', 'remote_link', 'duration', 'created_at')
     list_filter = ('is_active', 'created_at')
     search_fields = ('computer__hostname', 'author__username')

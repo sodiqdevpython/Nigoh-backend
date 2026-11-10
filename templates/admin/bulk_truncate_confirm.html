@@ -1,0 +1,41 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=app_label %}">{{ app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; TRUNCATE
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 720px; margin: 40px auto; padding: 32px; background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+    <h1 style="color: #c82333; margin-top: 0;">💥 TRUNCATE tasdiqlash</h1>
+
+    <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 16px; border-radius: 6px; margin: 20px 0;">
+        <strong>DIQQAT:</strong> Siz <code style="background:#f8d7da; padding:2px 6px; border-radius:3px;">{{ table }}</code> jadvalidagi <strong>{{ total|default:0 }}</strong> ta yozuvni <strong>BUTUNLAY</strong> o'chirmoqchisiz.
+    </div>
+
+    <ul style="color: #555; line-height: 1.8;">
+        <li>Bu amal <strong>ortga qaytarilmaydi</strong>.</li>
+        <li>Auto-increment ID 1 dan boshlanadi.</li>
+        <li>CASCADE orqali bog'liq jadvallarda ham bo'lgan FK yozuvlar o'chadi.</li>
+        <li>Django signal'lari (pre_delete, post_delete) <strong>chaqirilmaydi</strong>.</li>
+    </ul>
+
+    <form method="post" style="margin-top: 28px;">
+        {% csrf_token %}
+        <button type="submit"
+                style="background:#c82333;color:#fff;border:none;padding:12px 32px;font-size:15px;font-weight:600;border-radius:5px;cursor:pointer;"
+                onclick="return confirm('Rostdan ham {{ total }} ta yozuvni o‘chirishni xohlaysizmi? Qaytarib bo‘lmaydi.');">
+            ☠ Ha, hammasini TRUNCATE qiling
+        </button>
+        <a href="{% url opts|admin_urlname:'changelist' %}"
+           style="background:#6c757d;color:#fff;padding:12px 24px;text-decoration:none;border-radius:5px;margin-left:12px;display:inline-block;">
+            Bekor qilish
+        </a>
+    </form>
+</div>
+{% endblock %}

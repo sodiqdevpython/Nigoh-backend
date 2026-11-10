@@ -1,0 +1,16 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+    {{ block.super }}
+    {% if user.is_superuser %}
+        <li>
+            <a href="{% url opts|admin_urlname:'truncate_all' %}"
+               class="button"
+               style="background:#c82333;color:#fff;font-weight:600;border:1px solid #a71d2a;"
+               onclick="return confirm('BUTUN jadvalni o‘chirishni xohlaysizmi?\n\nBu amal ortga qaytarib bo‘lmaydi.');">
+                💥 TRUNCATE barcha jadval
+            </a>
+        </li>
+    {% endif %}
+{% endblock %}

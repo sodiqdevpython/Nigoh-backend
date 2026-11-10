@@ -115,7 +115,7 @@ class ReleaseAdmin(admin.ModelAdmin):
 
 
 @admin.register(PendingCommand)
-class PendingCommandAdmin(admin.ModelAdmin):
+class PendingCommandAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
     list_display = [
         'id', 'computer', 'action', 'release',
         'status_display', 'attempts_display',
@@ -124,6 +124,7 @@ class PendingCommandAdmin(admin.ModelAdmin):
     list_filter = ['action', 'success']
     search_fields = ['computer__hostname', 'computer__device_id']
     readonly_fields = ['delivered_at', 'acknowledged_at', 'attempts']
+    list_per_page = 50  # katta hajmda default 100 sekin
 
     def status_display(self, obj):
         if obj.acknowledged_at and obj.success:

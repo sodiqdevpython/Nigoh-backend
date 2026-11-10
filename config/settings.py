@@ -189,6 +189,15 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# ═══════════════════════════════════════════════════════════════════
+# ADMIN BULK OPERATIONS — katta jadvallarda ko'p qator tanlash uchun.
+# Default 1000 — 283K log'da "Select all" bosilsa 400 Bad Request beradi.
+# None = cheksiz. Kerak bo'lsa 500000 qo'ying — DoS himoyasi uchun.
+# ═══════════════════════════════════════════════════════════════════
+DATA_UPLOAD_MAX_NUMBER_FIELDS = None
+DATA_UPLOAD_MAX_MEMORY_SIZE   = 100 * 1024 * 1024    # 100 MB — fayl yuklash chegarasi
+FILE_UPLOAD_MAX_MEMORY_SIZE   = 100 * 1024 * 1024
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 

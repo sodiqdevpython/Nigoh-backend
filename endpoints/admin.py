@@ -8,6 +8,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Group, Computer, WhitelistedComputer
 from .consumers import LIVE_METRICS
+from utils.admin_bulk import BulkDeleteAdminMixin
 from commands.services import trigger_uninstall, trigger_update
 
 # --- SOCKET ORQALI BUYRUQ YUBORISH FUNKSIYASI ---
@@ -67,7 +68,7 @@ class GroupAdmin(admin.ModelAdmin):
 
 
 @admin.register(Computer)
-class ComputerAdmin(admin.ModelAdmin):
+class ComputerAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
     list_display = (
         'hostname', 'owner', 'device_id_short', 'whitelist_badge',
         'agent_version', 'watchdog_version',
