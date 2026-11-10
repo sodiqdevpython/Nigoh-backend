@@ -303,6 +303,57 @@ def _maybe_cleanup_old_executions():
         print(f"[FIFO cleanup] {deleted} ta eski TerminalExecution o'chirildi (>30 kun)")
 
 
+def dispatch_pending_admin_executions_for(computer, server_url=None):
+    """
+    Watchdog WS ulangan paytda chaqiriladi — bugungi `pending` qolgan admin
+    execution'larni **qayta push qiladi**.
+
+    Sabab: agent ulanishi va Watchdog ulanishi parallel. Agent oldin ulansa va
+    dispatcher admin script uchun exec yaratsa, `wd_<id>` room'da hali hech kim
+    yo'q bo'lsa — xabar yo'qolib ketadi va exec `pending` da qoladi. Watchdog
+    ulanganda shu holatni to'g'irlash uchun shu funksiya chaqiriladi.
+
+    Qaytaradi: qayta push qilingan execution'lar soni.
+    """
+    from datetime import date, timedelta
+    from .models import TerminalExecution
+
+    if not computer:
+        return 0
+    server_url = server_url or _get_server_url_from_env()
+
+    # Oxirgi 24 soat'dagi pending admin execution'larni olish.
+    # Juda eski (1 kundan oldin) pending'lar — abandon qilamiz.
+    cutoff = date.today() - timedelta(days=1)
+    pending = TerminalExecution.objects.filter(
+        computer=computer,
+        run_as_admin=True,
+        status=TerminalExecution.STATUS_PENDING,
+        created_at__gte=cutoff,
+    )
+
+    pushed = 0
+    for exec_ in pending:
+        try:
+            one_liner = _build_terminal_one_liner(exec_.id, server_url)
+            ok = push_command_to_watchdog(computer, {
+                'type':    'do_command',
+                'action':  one_liner,
+                'message': '',
+                'payload': {
+                    'terminal_exec_id': str(exec_.id),
+                    'run_as_admin':     True,
+                    'retry':            True,
+                },
+            })
+            if ok:
+                pushed += 1
+        except Exception as e:
+            print(f"[dispatch_pending_admin_exec={exec_.id} xato] {e}")
+
+    return pushed
+
+
 def dispatch_scheduled_script_now(script, requested_by=None, server_url=None):
     """
     Admin "Hozir ishga tushir" bosganda chaqiriladi — bugungi guardni tekshirmasdan,

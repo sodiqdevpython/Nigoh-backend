@@ -238,6 +238,13 @@
 .admin-toggle:hover { background: rgba(255,152,0,0.15); }
 .admin-toggle input { accent-color: #ff9800; }
 .admin-toggle.active { background: rgba(255,152,0,0.2); border-color: #ff9800; }
+.admin-toggle.wd-offline {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: rgba(255,82,82,0.05);
+    border-color: rgba(255,82,82,0.3);
+}
+.admin-toggle.wd-offline:hover { background: rgba(255,82,82,0.08); }
 
 .offline-warning {
     padding: 14px 18px;
@@ -291,10 +298,15 @@
                     <div class="shell-tab pwsh" data-shell="powershell">PowerShell</div>
                 </div>
 
-                <label class="admin-toggle" title="Watchdog (SYSTEM) orqali ishga tushadi — printerlar, servicelar, HKLM registry va h.k. uchun">
-                    <input type="checkbox" id="adminToggle" style="margin-right: 6px; vertical-align: middle;">
-                    <span style="color: #ff9800; font-weight: 500; font-size: 13px;">
+                <label class="admin-toggle{% if not watchdog_ws_connected %} wd-offline{% endif %}"
+                       title="{% if watchdog_ws_connected %}Watchdog (SYSTEM) orqali ishga tushadi — printerlar, servicelar, HKLM registry va h.k. uchun{% else %}Bu PC'ning Watchdog'i hali yangi versiyaga yangilanmagan — admin komandalar ishlamaydi{% endif %}">
+                    <input type="checkbox" id="adminToggle" {% if not watchdog_ws_connected %}disabled{% endif %}
+                           style="margin-right: 6px; vertical-align: middle;">
+                    <span style="color: {% if watchdog_ws_connected %}#ff9800{% else %}#666{% endif %}; font-weight: 500; font-size: 13px;">
                         <i class="zmdi zmdi-shield-security"></i> Admin huquqlari (Watchdog)
+                        {% if not watchdog_ws_connected %}
+                            <span style="color: #ff5252; font-size: 11px; margin-left: 4px;">• WS ulanmagan</span>
+                        {% endif %}
                     </span>
                 </label>
             </div>

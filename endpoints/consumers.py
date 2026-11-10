@@ -401,6 +401,32 @@ class WatchdogConsumer(AsyncWebsocketConsumer):
         await self.accept()
         print(f"[WD+] Watchdog ulandi: {self.key}")
 
+        # Catch-up: bugungi pending qolgan admin execution'lar bo'lsa qayta push qilamiz
+        # (agent oldin ulanib exec yaratgan, lekin Watchdog hali ulanmagan edi).
+        await self.dispatch_pending_admin()
+
+    async def dispatch_pending_admin(self):
+        """Watchdog ulangan paytda — bugungi pending admin execution'larni qayta push qilish."""
+        try:
+            from asgiref.sync import sync_to_async
+            from endpoints.models import Computer
+            from commands.services import dispatch_pending_admin_executions_for
+
+            def _find_computer():
+                if self.device_id:
+                    return Computer.objects.filter(device_id=self.device_id).first()
+                return Computer.objects.filter(bios_uuid=self.bios_uuid).first()
+
+            computer = await sync_to_async(_find_computer)()
+            if not computer:
+                return
+
+            n = await sync_to_async(dispatch_pending_admin_executions_for)(computer)
+            if n > 0:
+                print(f"[WD+ catch-up] {self.key} — {n} ta pending admin exec qayta push qilindi")
+        except Exception as e:
+            print(f"[WD+ catch-up xato] {e}")
+
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.wd_room, self.channel_name)
         if WD_ACTIVE_CHANNELS.get(self.key) == self.channel_name:

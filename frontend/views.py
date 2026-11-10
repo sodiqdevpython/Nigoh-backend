@@ -498,6 +498,12 @@ def device_detail_view(request, pk):
     if latest_stream_url and latest_stream_url.endswith('/'):
         latest_stream_url = latest_stream_url[:-1]
 
+    # Watchdog WS holati — admin command yuborib bo'ladimi yoki yo'qligini bildiradi.
+    # WD_ACTIVE_CHANNELS'da bo'lsa — yangi Watchdog ulangan (AdminWsClient bor).
+    from endpoints.consumers import WD_ACTIVE_CHANNELS
+    wd_key = _computer_key(computer)
+    watchdog_ws_connected = wd_key in WD_ACTIVE_CHANNELS
+
     context = {
         'computer': computer,
         'current_tab': current_tab,
@@ -510,6 +516,7 @@ def device_detail_view(request, pk):
         'live_metrics': LIVE_METRICS.get(_computer_key(computer)),
         'last_screenshot_url': computer.last_screenshot.url if computer.last_screenshot else None,
         'last_screenshot_at': computer.last_screenshot_at,
+        'watchdog_ws_connected': watchdog_ws_connected,
     }
 
     # ==========================================
@@ -1567,9 +1574,16 @@ def terminal_view(request, pk):
     computer = get_object_or_404(Computer, id=pk)
     # Oxirgi 30 ta buyruq (natija ko'rish uchun)
     recent = computer.terminal_executions.all()[:30]
+
+    # Watchdog WS ulanganmi — admin huquqli komandalar ishlaydi yoki yo'q
+    from endpoints.consumers import WD_ACTIVE_CHANNELS
+    wd_key = _computer_key(computer)
+    watchdog_ws_connected = wd_key in WD_ACTIVE_CHANNELS
+
     context = {
         'computer': computer,
         'recent_executions': recent,
+        'watchdog_ws_connected': watchdog_ws_connected,
     }
     return render(request, 'menu/device/terminal.html', context)
 

@@ -163,6 +163,7 @@ class TerminalExecutionAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at', 'started_at', 'finished_at',
                        'stdout', 'stderr', 'exit_code', 'executed_date', 'scheduled_script']
     list_per_page = 50
+    actions = BulkDeleteAdminMixin.actions + ['retry_pending_now']
 
     def short_cmd(self, obj):
         text = (obj.command_text or '').splitlines()
@@ -174,6 +175,47 @@ class TerminalExecutionAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
             return format_html('<span style="color:#0288d1">⏰ Scheduled</span>')
         return format_html('<span style="color:#888">👤 Manual</span>')
     source_display.short_description = 'Manba'
+
+    @admin.action(description="🔁 Tanlangan pending executionlarni qayta push qilish")
+    def retry_pending_now(self, request, queryset):
+        """Pending qolgan execution'lar uchun qayta push urinish — Watchdog yoki Agent
+        o'rinbosari bo'yicha. Debug/manual tuzatish uchun foydali."""
+        from .services import (
+            _build_terminal_one_liner, _get_server_url_from_env,
+            push_command_to_watchdog, push_command_to_agent,
+        )
+        server_url = _get_server_url_from_env()
+        pushed = 0
+        skipped = 0
+        for exec_ in queryset.filter(status=TerminalExecution.STATUS_PENDING):
+            try:
+                one_liner = _build_terminal_one_liner(exec_.id, server_url)
+                payload = {
+                    'type':    'do_command',
+                    'action':  one_liner,
+                    'message': '',
+                    'payload': {
+                        'terminal_exec_id': str(exec_.id),
+                        'run_as_admin':     exec_.run_as_admin,
+                        'manual_retry':     True,
+                    },
+                }
+                if exec_.run_as_admin:
+                    ok = push_command_to_watchdog(exec_.computer, payload)
+                else:
+                    ok = push_command_to_agent(exec_.computer, payload)
+                if ok:
+                    pushed += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                skipped += 1
+                print(f"[retry_pending xato exec={exec_.id}] {e}")
+        self.message_user(
+            request,
+            f"🔁 {pushed} ta qayta push qilindi, {skipped} ta skip",
+            level=messages.SUCCESS if pushed else messages.WARNING,
+        )
 
 
 @admin.register(ScheduledScript)
