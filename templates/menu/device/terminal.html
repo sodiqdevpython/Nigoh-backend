@@ -224,6 +224,21 @@
     align-items: center;
 }
 
+.admin-toggle {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 6px 12px;
+    background: rgba(255,152,0,0.08);
+    border: 1px solid rgba(255,152,0,0.25);
+    border-radius: 5px;
+    transition: 0.15s;
+    user-select: none;
+}
+.admin-toggle:hover { background: rgba(255,152,0,0.15); }
+.admin-toggle input { accent-color: #ff9800; }
+.admin-toggle.active { background: rgba(255,152,0,0.2); border-color: #ff9800; }
+
 .offline-warning {
     padding: 14px 18px;
     background: rgba(244,67,54,0.1);
@@ -270,9 +285,18 @@
             </div>
             {% endif %}
 
-            <div class="shell-tabs" id="shellTabs">
-                <div class="shell-tab active" data-shell="cmd">CMD</div>
-                <div class="shell-tab pwsh" data-shell="powershell">PowerShell</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                <div class="shell-tabs" id="shellTabs" style="margin: 0;">
+                    <div class="shell-tab active" data-shell="cmd">CMD</div>
+                    <div class="shell-tab pwsh" data-shell="powershell">PowerShell</div>
+                </div>
+
+                <label class="admin-toggle" title="Watchdog (SYSTEM) orqali ishga tushadi — printerlar, servicelar, HKLM registry va h.k. uchun">
+                    <input type="checkbox" id="adminToggle" style="margin-right: 6px; vertical-align: middle;">
+                    <span style="color: #ff9800; font-weight: 500; font-size: 13px;">
+                        <i class="zmdi zmdi-shield-security"></i> Admin huquqlari (Watchdog)
+                    </span>
+                </label>
             </div>
 
             <div class="cmd-input-wrap">
@@ -368,6 +392,13 @@
     let pollTimer = null;
     let historyIndex = -1;
     const historyLocal = JSON.parse(localStorage.getItem('terminal_history_{{ computer.id }}') || '[]');
+
+    // ─── Admin checkbox visual state ──────────────────────────
+    const $adminToggle = document.getElementById('adminToggle');
+    const $adminLabel = $adminToggle.closest('.admin-toggle');
+    $adminToggle.addEventListener('change', () => {
+        $adminLabel.classList.toggle('active', $adminToggle.checked);
+    });
 
     // ─── Shell switch ──────────────────────────────────────────
     $tabs.addEventListener('click', e => {
@@ -469,10 +500,12 @@
         showStatus('pending', 'Yuborilmoqda...');
         $outputBody.innerHTML = '<span class="output-empty">Agent buyruqni oladi va bajaradi...</span>';
 
+        const runAsAdmin = document.getElementById('adminToggle').checked;
+
         fetch(SUBMIT_URL, {
             method: 'POST',
             headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: cmd, shell: currentShell })
+            body: JSON.stringify({ command: cmd, shell: currentShell, run_as_admin: runAsAdmin })
         })
         .then(r => r.json())
         .then(data => {

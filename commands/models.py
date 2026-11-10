@@ -311,6 +311,11 @@ class ScheduledScript(BaseModel):
         help_text="Yangi ro'yxatga olingan PC'larda ham AVTOMATIK ishga tushsin "
                   "(target_mode='specific' da ham yangi PC'lar qo'shiladi)"
     )
+    run_as_admin = models.BooleanField(
+        default=False,
+        help_text="Ha bo'lsa — Watchdog (SYSTEM) orqali bajariladi (admin huquqi). "
+                  "Yo'q bo'lsa — Agent (user session) orqali oddiy user sifatida."
+    )
 
     # Audit — kim yaratgan
     created_by = models.ForeignKey(
@@ -382,6 +387,10 @@ class TerminalExecution(BaseModel):
     )
     shell = models.CharField(max_length=20, choices=SHELL_CHOICES, default=SHELL_CMD)
     command_text = models.TextField(help_text="To'liq buyruq matni (multi-line ham bo'ladi)")
+    run_as_admin = models.BooleanField(
+        default=False,
+        help_text="True — Watchdog (SYSTEM) tomonidan bajarilgan. False — Agent (user)."
+    )
 
     # Agar bu execution rejalashtirilgan script'dan kelib chiqqan bo'lsa — FK.
     # Admin terminal'dan qo'lda yuborilgan bo'lsa — NULL.

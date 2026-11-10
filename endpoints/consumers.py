@@ -7,8 +7,12 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 LIVE_METRICS = {}
 
 # Har bir device_id uchun hozirgi faol channel_name saqlanadi.
-# Stale disconnect() yangi ulanishni offline qilib qo'ymasligi uchun.
+# Stale disconnect() yangi ulanishni offline qilib qo'ymasydi uchun.
 ACTIVE_CHANNELS = {}
+
+# Watchdog online bo'lgan PC'lar (device_id -> channel_name) — admin command
+# yetkazilishi uchun. Agent connect/disconnect'dan mustaqil.
+WD_ACTIVE_CHANNELS = {}
 
 # asyncpg connection pool (bir marta yaratiladi, thread kerak emas)
 _pool = None
@@ -362,3 +366,77 @@ class ComputerConsumer(AsyncWebsocketConsumer):
             print(f"[{self.key}] buyruq push ({attempts + 1}/5): {action} cmd={cmd_id}")
         except Exception as e:
             print(f"[push_pending_command xato] {e}")
+
+
+# ═══════════════════════════════════════════════════════════════════
+# WATCHDOG CONSUMER
+# ═══════════════════════════════════════════════════════════════════
+# Watchdog service (Windows'da SYSTEM huquqida ishlaydi) ushbu endpointga
+# ulanadi. Admin huquqlari kerak bo'lgan `do_command` xabarlar shu yerga
+# yuboriladi — Watchdog ularni to'g'ridan-to'g'ri SYSTEM sifatida bajaradi
+# (UAC prompt'siz, parol so'ralmaydi).
+#
+# Oqim:
+#   1) Backend `trigger_exec_terminal(run_as_admin=True)` chaqiradi
+#   2) `wd_<device_id>` guruhiga `do_command` yuboriladi
+#   3) WatchdogConsumer → bitta ulangan Watchdog'ga xabar o'tadi
+#   4) Watchdog `powershell.exe -Command "{one_liner}"` ishga tushiradi
+#      — bu SYSTEM kontekstda bajariladi
+#   5) Script backend'dan yuklanib, admin buyruqni ishga tushirib natijani
+#      backend'ning `terminal/upload/` ga yuklab beradi
+# ═══════════════════════════════════════════════════════════════════
+
+class WatchdogConsumer(AsyncWebsocketConsumer):
+
+    async def connect(self):
+        kwargs = self.scope['url_route']['kwargs']
+        self.device_id = kwargs.get('device_id')
+        self.bios_uuid = kwargs.get('bios_uuid')
+        self.key = self.device_id or self.bios_uuid
+
+        self.wd_room = f'wd_{self.key}'
+        await self.channel_layer.group_add(self.wd_room, self.channel_name)
+
+        WD_ACTIVE_CHANNELS[self.key] = self.channel_name
+        await self.accept()
+        print(f"[WD+] Watchdog ulandi: {self.key}")
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(self.wd_room, self.channel_name)
+        if WD_ACTIVE_CHANNELS.get(self.key) == self.channel_name:
+            WD_ACTIVE_CHANNELS.pop(self.key, None)
+        print(f"[WD-] Watchdog uzildi: {self.key}")
+
+    async def receive(self, text_data):
+        """Watchdog'dan keladigan xabarlar.
+        Hozircha faqat ping/pong. Kelgusida self-update status va h.k. qo'shsa bo'ladi.
+        """
+        try:
+            data = json.loads(text_data)
+        except json.JSONDecodeError:
+            return
+        msg_type = data.get('type')
+
+        if msg_type == 'ping':
+            try:
+                await self.send(text_data=json.dumps({
+                    'type': 'pong',
+                    'server_time': data.get('client_time'),
+                }))
+            except Exception:
+                pass
+            return
+
+        # watchdog_version, admin_command_ack kabi kelgusi xabarlar uchun joy
+        if msg_type == 'watchdog_info':
+            # Watchdog'ning joriy versiyasini log'laymiz
+            print(f"[WD {self.key}] version={data.get('version')} uptime={data.get('uptime_sec')}")
+            return
+
+    async def execute_command(self, event):
+        """Backend `channel_layer.group_send('wd_<id>', {'type': 'execute_command', 'data': ...})`
+        chaqirganda bu metod chaqiriladi. Xabarni to'g'ridan-to'g'ri Watchdog'ga uzatadi."""
+        try:
+            await self.send(text_data=json.dumps(event['data']))
+        except Exception as e:
+            print(f"[WD execute_command xato] {e}")

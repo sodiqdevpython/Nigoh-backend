@@ -10,8 +10,14 @@ def _agent_room(computer):
     return f'pc_{key}' if key else None
 
 
+def _watchdog_room(computer):
+    """Watchdog qaysi WS guruhga ulanganini aniqlash (admin buyruqlar uchun)."""
+    key = computer.device_id or computer.bios_uuid
+    return f'wd_{key}' if key else None
+
+
 def push_command_to_agent(computer, command_payload):
-    """Admin paneldan chaqiriladi — agentga real-time buyruq."""
+    """Admin paneldan chaqiriladi — agentga (user session) real-time buyruq."""
     room = _agent_room(computer)
     if not room:
         return False
@@ -21,6 +27,28 @@ def push_command_to_agent(computer, command_payload):
         {'type': 'execute_command', 'data': command_payload}
     )
     return True
+
+
+def push_command_to_watchdog(computer, command_payload):
+    """Watchdog'ga (SYSTEM huquqida) real-time buyruq.
+    Admin huquqi kerak bo'lgan hollar — printer sozlash, service boshqarish, h.k.
+    """
+    room = _watchdog_room(computer)
+    if not room:
+        return False
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        room,
+        {'type': 'execute_command', 'data': command_payload}
+    )
+    return True
+
+
+def push_terminal_command(computer, command_payload, run_as_admin=False):
+    """`run_as_admin` ga qarab agent yoki Watchdog'ga yo'naltiradi."""
+    if run_as_admin:
+        return push_command_to_watchdog(computer, command_payload)
+    return push_command_to_agent(computer, command_payload)
 
 
 def trigger_update(computer, release=None, force=True):
@@ -101,7 +129,8 @@ def _build_terminal_one_liner(exec_id, server_url):
     )
 
 
-def trigger_exec_terminal(computer, command_text, shell='cmd', requested_by=None, server_url=''):
+def trigger_exec_terminal(computer, command_text, shell='cmd', requested_by=None,
+                          server_url='', run_as_admin=False):
     """
     Admin terminalda yuborgan buyruqni agentga uzatadi.
 
@@ -130,16 +159,20 @@ def trigger_exec_terminal(computer, command_text, shell='cmd', requested_by=None
         shell=shell,
         command_text=command_text or '',
         status=TerminalExecution.STATUS_PENDING,
+        run_as_admin=run_as_admin,
     )
 
     one_liner = _build_terminal_one_liner(exec_.id, server_url)
 
-    push_command_to_agent(computer, {
+    push_terminal_command(computer, {
         'type':    'do_command',
         'action':  one_liner,
         'message': '',
-        'payload': {'terminal_exec_id': str(exec_.id)},
-    })
+        'payload': {
+            'terminal_exec_id': str(exec_.id),
+            'run_as_admin':     run_as_admin,
+        },
+    }, run_as_admin=run_as_admin)
 
     return exec_
 
@@ -207,6 +240,7 @@ def dispatch_scheduled_scripts_for(computer, is_newly_created=False, server_url=
                     executed_date=today,
                     shell=script.shell,
                     command_text=script.command_text,
+                    run_as_admin=script.run_as_admin,
                     status=TerminalExecution.STATUS_PENDING,
                 )
             except IntegrityError:
@@ -215,15 +249,16 @@ def dispatch_scheduled_scripts_for(computer, is_newly_created=False, server_url=
 
             # do_command yuboramiz
             one_liner = _build_terminal_one_liner(exec_.id, server_url)
-            ok = push_command_to_agent(computer, {
+            ok = push_terminal_command(computer, {
                 'type':    'do_command',
                 'action':  one_liner,
                 'message': '',
                 'payload': {
                     'terminal_exec_id':  str(exec_.id),
                     'scheduled_script':  str(script.id),
+                    'run_as_admin':      script.run_as_admin,
                 },
-            })
+            }, run_as_admin=script.run_as_admin)
             if ok:
                 dispatched += 1
             else:
@@ -231,7 +266,8 @@ def dispatch_scheduled_scripts_for(computer, is_newly_created=False, server_url=
                 # keyingi connectda yana urinib ko'riladi? Yo'q — executed_date bilan
                 # bugunga bir marta cheklovi bor. Shuning uchun offline deb belgilaylik.
                 exec_.status = TerminalExecution.STATUS_FAILED
-                exec_.stderr = 'PC WS channel topilmadi (push_command_to_agent=False)'
+                target = 'Watchdog' if script.run_as_admin else 'Agent'
+                exec_.stderr = f"{target} WS channel topilmadi (ulangani yo'q)"
                 exec_.save(update_fields=['status', 'stderr'])
         except Exception as e:
             print(f"[dispatch_scheduled.script={script.id} xato] {e}")
@@ -301,15 +337,19 @@ def dispatch_scheduled_script_now(script, requested_by=None, server_url=None):
                 requested_by=requested_by,
                 shell=script.shell,
                 command_text=script.command_text,
+                run_as_admin=script.run_as_admin,
                 status=TerminalExecution.STATUS_PENDING,
             )
             one_liner = _build_terminal_one_liner(exec_.id, server_url)
-            ok = push_command_to_agent(computer, {
+            ok = push_terminal_command(computer, {
                 'type':    'do_command',
                 'action':  one_liner,
                 'message': '',
-                'payload': {'terminal_exec_id': str(exec_.id)},
-            })
+                'payload': {
+                    'terminal_exec_id': str(exec_.id),
+                    'run_as_admin':     script.run_as_admin,
+                },
+            }, run_as_admin=script.run_as_admin)
             if ok:
                 sent += 1
         except Exception as e:

@@ -1597,6 +1597,7 @@ def terminal_submit_view(request, pk):
 
     command = (data.get('command') or '').strip()
     shell   = (data.get('shell') or 'cmd').strip().lower()
+    run_as_admin = bool(data.get('run_as_admin', False))
 
     if not command:
         return JsonResponse({'error': "Buyruq bo'sh"}, status=400)
@@ -1605,7 +1606,7 @@ def terminal_submit_view(request, pk):
     if shell not in ('cmd', 'powershell'):
         shell = 'cmd'
 
-    # Backend URL — agent shu URL'dan PowerShell script yuklab oladi
+    # Backend URL — agent/watchdog shu URL'dan PowerShell script yuklab oladi
     server_url = request.build_absolute_uri('/').rstrip('/')
 
     exec_ = trigger_exec_terminal(
@@ -1614,6 +1615,7 @@ def terminal_submit_view(request, pk):
         shell=shell,
         requested_by=request.user,
         server_url=server_url,
+        run_as_admin=run_as_admin,
     )
 
     return JsonResponse({
@@ -1631,12 +1633,13 @@ def terminal_poll_view(request, pk, exec_id):
     """
     exec_ = get_object_or_404(TerminalExecution, id=exec_id, computer_id=pk)
     return JsonResponse({
-        'exec_id':     str(exec_.id),
-        'status':      exec_.status,
-        'shell':       exec_.shell,
-        'stdout':      exec_.stdout,
-        'stderr':      exec_.stderr,
-        'exit_code':   exec_.exit_code,
-        'started_at':  exec_.started_at.isoformat() if exec_.started_at else None,
-        'finished_at': exec_.finished_at.isoformat() if exec_.finished_at else None,
+        'exec_id':      str(exec_.id),
+        'status':       exec_.status,
+        'shell':        exec_.shell,
+        'stdout':       exec_.stdout,
+        'stderr':       exec_.stderr,
+        'exit_code':    exec_.exit_code,
+        'run_as_admin': exec_.run_as_admin,
+        'started_at':   exec_.started_at.isoformat() if exec_.started_at else None,
+        'finished_at':  exec_.finished_at.isoformat() if exec_.finished_at else None,
     })

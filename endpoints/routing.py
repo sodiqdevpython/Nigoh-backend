@@ -7,4 +7,8 @@ websocket_urlpatterns = [
 
     # Eski (legacy) — bios_uuid bilan ulanish (eski agentlar uchun saqlangan)
     re_path(r'ws/pc/(?P<bios_uuid>[\w\-]+)/$', consumers.ComputerConsumer.as_asgi()),
+
+    # Watchdog (SYSTEM huquqida) — admin command execution va self-update uchun
+    re_path(r'ws/wd/(?P<device_id>[a-fA-F0-9]{32})/$', consumers.WatchdogConsumer.as_asgi()),
+    re_path(r'ws/wd/(?P<bios_uuid>[\w\-]+)/$', consumers.WatchdogConsumer.as_asgi()),
 ]

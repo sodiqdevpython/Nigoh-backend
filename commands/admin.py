@@ -155,9 +155,9 @@ class UpdateLogAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
 
 @admin.register(TerminalExecution)
 class TerminalExecutionAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
-    list_display = ['computer', 'shell', 'short_cmd', 'status', 'exit_code',
+    list_display = ['computer', 'shell', 'run_as_admin', 'short_cmd', 'status', 'exit_code',
                     'source_display', 'executed_date', 'requested_by', 'created_at']
-    list_filter = ['shell', 'status', 'scheduled_script']
+    list_filter = ['shell', 'run_as_admin', 'status', 'scheduled_script']
     search_fields = ['computer__hostname', 'computer__device_id', 'command_text']
     readonly_fields = ['created_at', 'updated_at', 'started_at', 'finished_at',
                        'stdout', 'stderr', 'exit_code', 'executed_date', 'scheduled_script']
@@ -177,9 +177,9 @@ class TerminalExecutionAdmin(BulkDeleteAdminMixin, admin.ModelAdmin):
 
 @admin.register(ScheduledScript)
 class ScheduledScriptAdmin(admin.ModelAdmin):
-    list_display = ['name', 'shell', 'target_mode', 'include_new_devices',
+    list_display = ['name', 'shell', 'run_as_admin', 'target_mode', 'include_new_devices',
                     'is_active', 'exec_count_display', 'created_by', 'created_at']
-    list_filter = ['shell', 'target_mode', 'is_active', 'include_new_devices']
+    list_filter = ['shell', 'run_as_admin', 'target_mode', 'is_active', 'include_new_devices']
     search_fields = ['name', 'description', 'command_text']
     filter_horizontal = ['target_computers']
     readonly_fields = ['created_at', 'updated_at']
@@ -191,9 +191,11 @@ class ScheduledScriptAdmin(admin.ModelAdmin):
                            "yangi PC'larda ishga tushmaydi, lekin tarix saqlanadi."
         }),
         ('Buyruq', {
-            'fields': ('shell', 'command_text'),
+            'fields': ('shell', 'command_text', 'run_as_admin'),
             'description': "Multi-line va uzun script yozsa bo'ladi. Terminal sahifasidagi kabi "
-                           "yangi qatorlar va tirnoqlar muammo qilmaydi."
+                           "yangi qatorlar va tirnoqlar muammo qilmaydi. "
+                           "'run_as_admin' = True — Watchdog (SYSTEM) orqali bajariladi "
+                           "(printerlar, servicelar, HKLM registry uchun)."
         }),
         ('Kimlarda ishga tushsin', {
             'fields': ('target_mode', 'target_computers', 'include_new_devices'),
